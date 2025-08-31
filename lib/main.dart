@@ -43,7 +43,7 @@ class TestFormScreen extends StatelessWidget {
               ),
               child: const Center(
                 child: Text(
-                  'Name Field',
+                  'field1 - Name Field',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
@@ -64,7 +64,7 @@ class TestFormScreen extends StatelessWidget {
               ),
               child: const Center(
                 child: Text(
-                  'Email Field',
+                  'field2 - Email Field',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
@@ -85,7 +85,7 @@ class TestFormScreen extends StatelessWidget {
               ),
               child: const Center(
                 child: Text(
-                  'Phone Field',
+                  'field3 - Phone Field',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
@@ -106,7 +106,7 @@ class TestFormScreen extends StatelessWidget {
               ),
               child: const Center(
                 child: Text(
-                  'Address Field',
+                  'field4 - Address Field',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
@@ -127,7 +127,7 @@ class TestFormScreen extends StatelessWidget {
               ),
               child: const Center(
                 child: Text(
-                  'Notes Field',
+                  'field5 - Notes Field',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
@@ -139,28 +139,31 @@ class TestFormScreen extends StatelessWidget {
     final Map<String, FieldConfig> defaultConfigs = {
       'field1': FieldConfig(
         id: 'field1',
-        position: const Offset(0, 0),        // Slot 0
-        width: 1.0,                          // Full width
+        position: const Offset(0, 0), // Slot 0
+        width: 1.0, // Full width
       ),
       'field2': FieldConfig(
         id: 'field2',
-        position: const Offset(0, 70),       // Slot 0, Row 1
-        width: 1/2,                          // Half width (magnetic)
+        position: const Offset(0, 70), // Slot 0, Row 1
+        width: 1 / 2, // Half width (magnetic)
       ),
       'field3': FieldConfig(
         id: 'field3',
-        position: const Offset(1/2, 70),     // Slot 1.5 -> will snap to 2/3, Row 1
-        width: 1/3,                          // Third width (magnetic)
+        position: const Offset(
+          1 / 2,
+          70,
+        ), // Slot 1.5 -> will snap to 2/3, Row 1
+        width: 1 / 3, // Third width (magnetic)
       ),
       'field4': FieldConfig(
         id: 'field4',
-        position: const Offset(0, 140),      // Slot 0, Row 2
-        width: 2/3,                          // Two-thirds width (magnetic)
+        position: const Offset(0, 140), // Slot 0, Row 2
+        width: 2 / 3, // Two-thirds width (magnetic)
       ),
       'field5': FieldConfig(
         id: 'field5',
-        position: const Offset(2/3, 140),    // Slot 2, Row 2
-        width: 1/3,                          // Third width (magnetic)
+        position: const Offset(2 / 3, 140), // Slot 2, Row 2
+        width: 1 / 3, // Third width (magnetic)
       ),
     };
 
