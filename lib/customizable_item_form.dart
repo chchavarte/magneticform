@@ -53,7 +53,6 @@ class MagneticCardSystem {
   // Base widths starting from 1/3 as minimum
   static const List<double> cardWidths = [
     1 / 3, // One third - minimum usable width
-    1 / 2, // Half
     2 / 3, // Two thirds
     1.0, // Full width
   ];
@@ -68,8 +67,8 @@ class MagneticCardSystem {
     );
     final snappedY = targetRow * cardHeight;
 
-    // Snap to grid positions based on thirds instead of sixths
-    final columnWidth = containerWidth / 3; // Divide container into 3 columns
+    // Snap to grid positions based on sixths for 6-column grid
+    final columnWidth = containerWidth / 6; // Divide container into 6 columns
     final targetSlot = (currentPos.dx / columnWidth).round();
     final snappedX = (targetSlot * columnWidth).clamp(
       0.0,
@@ -100,25 +99,28 @@ class MagneticCardSystem {
 
   // Column-aware overlap detection
   static int getColumnFromPosition(double xPosition, double containerWidth) {
-    // xPosition is normalized (0-1), multiply by 3 to get column position
-    // Use floor instead of round to get the starting column
-    return (xPosition * 3).floor().clamp(0, 2);
+    // 6-column grid: proper boundary detection
+    // Column boundaries: 0-0.167, 0.167-0.333, 0.333-0.5, 0.5-0.667, 0.667-0.833, 0.833-1.0
+    final column = (xPosition * 6).floor().clamp(0, 5);
+    debugPrint(
+      '🔢 Position ${xPosition.toStringAsFixed(3)} → Column $column (${xPosition * 6})',
+    );
+    return column;
   }
 
   static int getColumnsFromWidth(double width) {
-    // More precise width to column mapping
-    if (width <= 1 / 3 + 0.01) return 1; // 1/3 width = 1 column
-    if (width <= 1 / 2 + 0.01)
-      return 2; // 1/2 width = 2 columns (spans 1.5, rounds up)
-    if (width <= 2 / 3 + 0.01) return 2; // 2/3 width = 2 columns
-    return 3; // 1.0 width = 3 columns (full row)
+    // Width to column span mapping for 6-column grid
+    if (width <= 1 / 3 + 0.01) return 2; // 1/3 width = 2 columns (2/6)
+    if (width <= 1 / 2 + 0.01) return 3; // 1/2 width = 3 columns (3/6)
+    if (width <= 2 / 3 + 0.01) return 4; // 2/3 width = 4 columns (4/6)
+    return 6; // 1.0 width = 6 columns (full row)
   }
 
   // Get the actual column span based on width and starting position
   static int getActualColumnSpan(double width, int startColumn) {
     final baseSpan = getColumnsFromWidth(width);
-    // Ensure we don't exceed the grid (3 columns max)
-    return (startColumn + baseSpan <= 3) ? baseSpan : (3 - startColumn);
+    // Ensure we don't exceed the grid (6 columns max)
+    return (startColumn + baseSpan <= 6) ? baseSpan : (6 - startColumn);
   }
 
   static int getRowFromPosition(double yPosition) {
@@ -140,6 +142,15 @@ class MagneticCardSystem {
     );
     final newColumnSpan = getActualColumnSpan(newWidth, newStartColumn);
     final newEndColumn = newStartColumn + newColumnSpan - 1;
+
+    debugPrint('🔍 OVERLAP CHECK:');
+    debugPrint(
+      '  Testing position: (${newPosition.dx.toStringAsFixed(2)}, ${newPosition.dy.toStringAsFixed(0)})',
+    );
+    debugPrint('  New field width: ${newWidth.toStringAsFixed(2)}');
+    debugPrint(
+      '  New field: row $newRow, cols $newStartColumn-$newEndColumn (span: $newColumnSpan)',
+    );
 
     // Check against all existing fields in the same row
     for (final entry in existingFields.entries) {
@@ -163,13 +174,35 @@ class MagneticCardSystem {
       );
       final existingEndColumn = existingStartColumn + existingColumnSpan - 1;
 
+      debugPrint(
+        '  Checking against ${entry.key}: row $existingRow, cols $existingStartColumn-$existingEndColumn (span: $existingColumnSpan, width: ${config.width.toStringAsFixed(2)})',
+      );
+      debugPrint(
+        '    Position: (${config.position.dx.toStringAsFixed(2)}, ${config.position.dy.toStringAsFixed(0)})',
+      );
+
       // Check for column overlap
-      if (!(newEndColumn < existingStartColumn ||
-          newStartColumn > existingEndColumn)) {
+      final wouldOverlapResult =
+          !(newEndColumn < existingStartColumn ||
+              newStartColumn > existingEndColumn);
+
+      debugPrint(
+        '    Overlap check: !($newEndColumn < $existingStartColumn || $newStartColumn > $existingEndColumn) = $wouldOverlapResult',
+      );
+
+      if (wouldOverlapResult) {
+        debugPrint('❌ OVERLAP DETECTED:');
+        debugPrint(
+          '  New field: cols $newStartColumn-$newEndColumn (width: $newWidth)',
+        );
+        debugPrint(
+          '  Existing ${entry.key}: cols $existingStartColumn-$existingEndColumn (width: ${config.width})',
+        );
         return true; // Overlap detected
       }
     }
 
+    debugPrint('✅ NO OVERLAP DETECTED');
     return false; // No overlap
   }
 
@@ -249,6 +282,38 @@ class MagneticCardSystem {
 
     return occupancy;
   }
+
+  // Calculate effective width accounting for gaps
+  static double getEffectiveWidth(
+    double containerWidth,
+    double widthPercentage,
+    double positionX,
+  ) {
+    final baseWidth = widthPercentage * containerWidth;
+    // Subtract gap if not in first column
+    return positionX > 0 ? baseWidth - fieldGap : baseWidth;
+  }
+
+  // Calculate available space accounting for gaps between fields
+  static double getAvailableSpaceWithGaps(
+    double containerWidth,
+    List<FieldConfig> fieldsInRow,
+  ) {
+    if (fieldsInRow.isEmpty) return 1.0;
+
+    double totalOccupied = 0.0;
+    int gapCount = 0;
+
+    for (final field in fieldsInRow) {
+      totalOccupied += field.width;
+      if (field.position.dx > 0)
+        gapCount++; // Count gaps for non-first-column fields
+    }
+
+    // Account for gap space in percentage terms
+    final gapSpacePercentage = (gapCount * fieldGap) / containerWidth;
+    return (1.0 - totalOccupied - gapSpacePercentage).clamp(0.0, 1.0);
+  }
 }
 
 // Field definition for the form
@@ -299,9 +364,26 @@ class CustomizableFormState extends State<CustomizableForm> {
   final bool _isLoading = false;
   bool _isCustomizationMode = false;
   String? _selectedFieldId;
+  String? _draggedFieldId;
   Offset? _dragStartPosition;
   Offset? _dragStartFieldPosition;
   double _accumulatedDrag = 0;
+
+  // Hover state for push down logic
+  int? _hoveredColumn;
+  int? _hoveredRow;
+
+  // Auto-resize feedback
+  String? _autoResizeMessage;
+  DateTime? _autoResizeTime;
+
+  // Magnetic timeline: Store original positions for restoration
+  final Map<String, Offset> _originalPositions = {};
+  final Set<String> _temporarilyMovedFields = {};
+
+  // Hover threshold to prevent accidental triggering
+  static const double hoverThreshold = 40.0; // pixels
+  bool _hasMovedBeyondThreshold = false;
 
   // Form data storage
   final Map<String, TextEditingController> _controllers = {};
@@ -402,6 +484,273 @@ class CustomizableFormState extends State<CustomizableForm> {
       );
     }
     debugPrint('========================\n');
+  }
+
+  // Restore original positions of temporarily moved fields
+  void _restoreOriginalPositions() {
+    debugPrint('\n=== RESTORE ORIGINAL POSITIONS ===');
+    debugPrint('Fields to restore: $_temporarilyMovedFields');
+
+    // Restore all temporarily moved fields to their original positions
+    for (final fieldId in _temporarilyMovedFields) {
+      if (_originalPositions.containsKey(fieldId)) {
+        final currentPos = _fieldConfigs[fieldId]!.position;
+        final originalPos = _originalPositions[fieldId]!;
+
+        debugPrint(
+          '$fieldId: ${currentPos.dx.toStringAsFixed(2)},${currentPos.dy.toStringAsFixed(0)} → ${originalPos.dx.toStringAsFixed(2)},${originalPos.dy.toStringAsFixed(0)}',
+        );
+
+        setState(() {
+          // Preserve current width when restoring position
+          final currentWidth = _fieldConfigs[fieldId]!.width;
+          _fieldConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
+            position: _originalPositions[fieldId]!,
+            width: currentWidth, // Keep any width changes that were made
+          );
+        });
+      }
+    }
+    _temporarilyMovedFields.clear();
+    debugPrint('=== RESTORE COMPLETE ===\n');
+  }
+
+  // Check if there's space available in a row for a field
+  bool _hasSpaceInRow(int targetRow, String excludeFieldId, double fieldWidth) {
+    final containerWidth = MediaQuery.of(context).size.width - 32;
+
+    // Try different positions in the row to see if the field fits (6-column grid)
+    for (int col = 0; col < 6; col++) {
+      final testX =
+          (col * containerWidth / 6) / containerWidth; // Normalize to 0-1
+      final testPosition = Offset(
+        testX,
+        targetRow * MagneticCardSystem.cardHeight,
+      );
+
+      if (!MagneticCardSystem.wouldOverlap(
+        testPosition,
+        fieldWidth,
+        containerWidth,
+        _fieldConfigs,
+        excludeFieldId,
+      )) {
+        return true; // Found a spot
+      }
+    }
+    return false; // No space available
+  }
+
+  // Push down logic - main entry point
+  void _pushDownAllFieldsAtRow(int targetRow, String excludeFieldId) {
+    debugPrint('\n=== PUSH DOWN FOR ROW $targetRow ===');
+    debugPrint('Excluding: $excludeFieldId');
+
+    // First, restore any previously moved fields
+    _restoreOriginalPositions();
+
+    final currentWidth = _fieldConfigs[excludeFieldId]!.width;
+
+    // Check if there's space available in the target row
+    if (_hasSpaceInRow(targetRow, excludeFieldId, currentWidth)) {
+      // There's space - find the exact position in the target row
+      final containerWidth = MediaQuery.of(context).size.width - 32;
+      final columnSpan = MagneticCardSystem.getColumnsFromWidth(currentWidth);
+
+      Offset? foundPosition;
+
+      // Try each possible starting column in the target row only (6-column grid)
+      for (int startCol = 0; startCol <= 6 - columnSpan; startCol++) {
+        final testPosition = Offset(
+          startCol / 6.0, // Direct normalization to 0-1
+          targetRow * MagneticCardSystem.cardHeight,
+        );
+
+        if (!MagneticCardSystem.wouldOverlap(
+          testPosition,
+          currentWidth,
+          containerWidth,
+          _fieldConfigs,
+          excludeFieldId,
+        )) {
+          foundPosition = testPosition;
+          break; // Use the first available position
+        }
+      }
+
+      if (foundPosition != null) {
+        debugPrint('Auto-fitting field $excludeFieldId to available position');
+        debugPrint(
+          '  New position: (${foundPosition.dx.toStringAsFixed(2)}, ${foundPosition.dy.toStringAsFixed(0)})',
+        );
+
+        setState(() {
+          _fieldConfigs[excludeFieldId] = _fieldConfigs[excludeFieldId]!
+              .copyWith(position: foundPosition);
+          _temporarilyMovedFields.add(excludeFieldId);
+
+          // End drag after auto-fit to prevent position drift
+          if (_draggedFieldId == excludeFieldId) {
+            _draggedFieldId = null;
+            _dragStartPosition = null;
+            _dragStartFieldPosition = null;
+            _hoveredColumn = null;
+            _hoveredRow = null;
+          }
+        });
+
+        // Show auto-fit feedback
+        _showAutoResizeMessage(
+          'Auto-fitted $excludeFieldId to available position (${(currentWidth * 100).toInt()}% width)',
+        );
+      } else {
+        // This shouldn't happen if _hasSpaceInRow returned true, but fallback to rearrange
+        debugPrint(
+          '❌ Unexpected: _hasSpaceInRow said true but no position found. Using rearrange logic.',
+        );
+        _rearrangeFieldsWithPullUp(targetRow, excludeFieldId);
+      }
+    } else {
+      // No space - use rearrangement logic
+      debugPrint('❌ No space available. Using rearrange logic with pull-up.');
+      _rearrangeFieldsWithPullUp(targetRow, excludeFieldId);
+    }
+  }
+
+  void _rearrangeFieldsWithPullUp(int targetRow, String excludeFieldId) {
+    final draggedFieldOriginalRow = MagneticCardSystem.getRowFromPosition(
+      _originalPositions[excludeFieldId]!.dy,
+    );
+
+    debugPrint(
+      'Dragged field original row: $draggedFieldOriginalRow, target row: $targetRow',
+    );
+
+    // Get ALL fields except the dragged one
+    final allOtherFields = <String, Offset>{};
+    for (final entry in _originalPositions.entries) {
+      final fieldId = entry.key;
+      if (fieldId == excludeFieldId) continue;
+      allOtherFields[fieldId] = entry.value;
+    }
+
+    // Group fields by their original row
+    final fieldsByRow = <int, List<MapEntry<String, Offset>>>{};
+    for (final entry in allOtherFields.entries) {
+      final originalRow = MagneticCardSystem.getRowFromPosition(entry.value.dy);
+      fieldsByRow.putIfAbsent(originalRow, () => []).add(entry);
+    }
+
+    // Sort rows to maintain order
+    final sortedRows = fieldsByRow.keys.toList()..sort();
+
+    // Compact all fields and reserve space for target row
+    debugPrint('Compacting fields with pull-up logic:');
+    int nextAvailableRow = 0;
+
+    for (final originalRow in sortedRows) {
+      final fieldsInRow = fieldsByRow[originalRow]!;
+
+      // Skip the target row - reserve it for the dragged field
+      if (nextAvailableRow == targetRow) {
+        debugPrint(
+          '  Skipping row $nextAvailableRow (reserved for dragged field)',
+        );
+        nextAvailableRow++;
+      }
+
+      debugPrint('  Row $originalRow → Row $nextAvailableRow:');
+
+      for (final entry in fieldsInRow) {
+        final fieldId = entry.key;
+        final originalPosition = entry.value;
+
+        final newPosition = Offset(
+          originalPosition.dx,
+          nextAvailableRow * MagneticCardSystem.cardHeight,
+        );
+
+        debugPrint(
+          '    $fieldId: pos(${originalPosition.dx.toStringAsFixed(2)},${originalPosition.dy.toStringAsFixed(0)}) → (${newPosition.dx.toStringAsFixed(2)},${newPosition.dy.toStringAsFixed(0)})',
+        );
+
+        setState(() {
+          _fieldConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
+            position: newPosition,
+          );
+          _temporarilyMovedFields.add(fieldId);
+        });
+      }
+
+      nextAvailableRow++; // Move to next available row
+    }
+    debugPrint('=== REARRANGE COMPLETE ===\n');
+  }
+
+  // Pull up fields to fill gaps after drag operations
+  void _pullUpFieldsToFillGaps() {
+    debugPrint('\n=== PULL UP FIELDS TO FILL GAPS ===');
+
+    // Find all rows that have fields
+    Map<int, List<String>> fieldsByRow = {};
+    for (final entry in _fieldConfigs.entries) {
+      final fieldId = entry.key;
+      final config = entry.value;
+      if (config.width <= 0 || config.position.dx < 0 || config.position.dy < 0)
+        continue;
+
+      final position = config.position;
+      final row = MagneticCardSystem.getRowFromPosition(position.dy);
+
+      if (!fieldsByRow.containsKey(row)) {
+        fieldsByRow[row] = [];
+      }
+      fieldsByRow[row]!.add(fieldId);
+    }
+
+    // Get all rows with fields, sorted
+    List<int> occupiedRows = fieldsByRow.keys.toList()..sort();
+    debugPrint('Occupied rows: $occupiedRows');
+
+    // Calculate all position changes in one pass (no setState yet)
+    Map<String, FieldConfig> updatedConfigs = {};
+    bool hasChanges = false;
+
+    // Simple single-pass algorithm: assign consecutive row numbers
+    int targetRow = 0;
+    for (int sourceRow in occupiedRows) {
+      if (sourceRow != targetRow) {
+        // This row needs to be moved up
+        List<String> fieldsInRow = fieldsByRow[sourceRow]!;
+        debugPrint('  Pulling up row $sourceRow → row $targetRow:');
+
+        for (String fieldId in fieldsInRow) {
+          final currentConfig = _fieldConfigs[fieldId]!;
+          final newY = targetRow * MagneticCardSystem.cardHeight;
+          final newPosition = Offset(currentConfig.position.dx, newY);
+
+          updatedConfigs[fieldId] = currentConfig.copyWith(
+            position: newPosition,
+          );
+          debugPrint('    $fieldId: row $sourceRow → row $targetRow');
+          hasChanges = true;
+        }
+      }
+      targetRow++;
+    }
+
+    // Apply all changes in a single setState
+    if (hasChanges) {
+      setState(() {
+        for (final entry in updatedConfigs.entries) {
+          _fieldConfigs[entry.key] = entry.value;
+        }
+      });
+      debugPrint('=== PULL UP COMPLETE ===\n');
+    } else {
+      debugPrint('No gaps found, no pull-up needed');
+      debugPrint('=== PULL UP COMPLETE ===\n');
+    }
   }
 
   @override
@@ -516,6 +865,37 @@ class CustomizableFormState extends State<CustomizableForm> {
                 SizedBox(height: bottomPadding),
               ],
             ),
+            // Auto-resize feedback message
+            if (_autoResizeMessage != null)
+              Positioned(
+                top: 16,
+                left: 16,
+                right: 16,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary,
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.2,
+                        ),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    _autoResizeMessage!,
+                    style: TextStyle(
+                      color: theme.colorScheme.onPrimary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -578,6 +958,7 @@ class CustomizableFormState extends State<CustomizableForm> {
     }
 
     final isSelected = _selectedFieldId == fieldId;
+    final isDragged = _draggedFieldId == fieldId;
     final containerWidth = MediaQuery.of(context).size.width - 32;
     final theme = Theme.of(context);
 
@@ -593,15 +974,15 @@ class CustomizableFormState extends State<CustomizableForm> {
             onTap: _isCustomizationMode ? () => _selectField(fieldId) : null,
             onLongPressStart:
                 _isCustomizationMode
-                    ? (details) => _startFieldDrag(fieldId)
+                    ? (details) => _startFieldDrag(fieldId, details)
                     : null,
             onLongPressMoveUpdate:
-                _isCustomizationMode && isSelected
+                _isCustomizationMode && _draggedFieldId == fieldId
                     ? (details) => _onFieldDrag(fieldId, details)
                     : null,
             onLongPressEnd:
-                _isCustomizationMode && isSelected
-                    ? (details) => _onFieldDragEnd(fieldId)
+                _isCustomizationMode && _draggedFieldId == fieldId
+                    ? (details) => _onFieldDragEnd(fieldId, details)
                     : null,
             behavior: HitTestBehavior.opaque,
             child: AbsorbPointer(
@@ -615,7 +996,24 @@ class CustomizableFormState extends State<CustomizableForm> {
                       config.position.dx > 0 ? MagneticCardSystem.fieldGap : 0,
                 ),
                 decoration:
-                    _isCustomizationMode && isSelected
+                    isDragged
+                        ? BoxDecoration(
+                          border: Border.all(
+                            color: theme.colorScheme.primary,
+                            width: 3,
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: theme.colorScheme.primary.withValues(
+                                alpha: 0.4,
+                              ),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        )
+                        : _isCustomizationMode && isSelected
                         ? BoxDecoration(
                           border: Border.all(
                             color: theme.colorScheme.primary,
@@ -730,6 +1128,150 @@ class CustomizableFormState extends State<CustomizableForm> {
         ],
       ),
     );
+  }
+
+  void _startFieldDrag(String fieldId, LongPressStartDetails details) {
+    HapticFeedback.mediumImpact();
+    final config = _fieldConfigs[fieldId]!;
+
+    debugPrint('\n🚀 DRAG START: $fieldId');
+    debugPrint('Start position: ${details.globalPosition}');
+    debugPrint('Field position: ${config.position}');
+
+    setState(() {
+      _draggedFieldId = fieldId;
+      _selectedFieldId = fieldId; // Also select the field
+      _dragStartPosition = details.globalPosition;
+      _dragStartFieldPosition = config.position;
+      _hasMovedBeyondThreshold = false; // Reset threshold flag
+
+      // Store original positions of all fields at drag start
+      _originalPositions.clear();
+      _temporarilyMovedFields.clear();
+      for (final entry in _fieldConfigs.entries) {
+        _originalPositions[entry.key] = entry.value.position;
+      }
+    });
+
+    debugPrint('Original positions stored:');
+    final containerWidth = MediaQuery.of(context).size.width - 32;
+    for (final entry in _originalPositions.entries) {
+      final pos = entry.value;
+      final col = MagneticCardSystem.getColumnFromPosition(
+        pos.dx,
+        containerWidth,
+      );
+      final row = MagneticCardSystem.getRowFromPosition(pos.dy);
+      debugPrint(
+        '  ${entry.key}: (${pos.dx.toStringAsFixed(2)},${pos.dy.toStringAsFixed(0)}) → col:$col, row:$row',
+      );
+    }
+    debugPrint('🚀 DRAG START COMPLETE\n');
+  }
+
+  void _onFieldDrag(String fieldId, LongPressMoveUpdateDetails details) {
+    if (_dragStartPosition == null || _dragStartFieldPosition == null) return;
+
+    final containerWidth = MediaQuery.of(context).size.width - 32;
+    final config = _fieldConfigs[fieldId]!;
+
+    // Calculate distance moved from start position
+    final distanceMoved =
+        (details.globalPosition - _dragStartPosition!).distance;
+
+    // Check if we've moved beyond the threshold
+    if (!_hasMovedBeyondThreshold && distanceMoved > hoverThreshold) {
+      _hasMovedBeyondThreshold = true;
+    }
+
+    // Calculate delta from start position
+    final deltaX =
+        (details.globalPosition.dx - _dragStartPosition!.dx) / containerWidth;
+    final deltaY = details.globalPosition.dy - _dragStartPosition!.dy;
+
+    // Calculate new position
+    final newX = (_dragStartFieldPosition!.dx + deltaX).clamp(
+      0.0,
+      1.0 - config.width,
+    );
+    final newY = (_dragStartFieldPosition!.dy + deltaY).clamp(
+      0.0,
+      MagneticCardSystem.maxRows * MagneticCardSystem.cardHeight,
+    );
+
+    final newPosition = Offset(newX, newY);
+
+    // Get hovered column and row
+    final hoveredColumn = MagneticCardSystem.getColumnFromPosition(
+      newPosition.dx,
+      containerWidth,
+    );
+    final hoveredRow = MagneticCardSystem.getRowFromPosition(newPosition.dy);
+
+    bool needsRearrangement = false;
+
+    // Only trigger hover effects if we've moved beyond the threshold
+    if (_hasMovedBeyondThreshold) {
+      // Check if hovered ROW changed (ignore column changes)
+      if (_hoveredRow != hoveredRow) {
+        _hoveredColumn = hoveredColumn;
+        _hoveredRow = hoveredRow;
+        needsRearrangement = true;
+      } else {
+        // Just update column for display
+        _hoveredColumn = hoveredColumn;
+      }
+    }
+
+    // Single setState with all updates
+    setState(() {
+      // Update dragged field position (preserve any width changes from auto-resize)
+      final currentWidth = _fieldConfigs[fieldId]!.width;
+      _fieldConfigs[fieldId] = config.copyWith(
+        position: newPosition,
+        width: currentWidth, // Preserve width changes from auto-resize
+      );
+    });
+
+    // Trigger rearrangement after setState to avoid nested setState calls
+    if (needsRearrangement) {
+      // Use post-frame callback to avoid performance issues
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _pushDownAllFieldsAtRow(hoveredRow, fieldId);
+        }
+      });
+    }
+  }
+
+  void _onFieldDragEnd(String fieldId, LongPressEndDetails details) {
+    final containerWidth = MediaQuery.of(context).size.width - 32;
+    final config = _fieldConfigs[fieldId]!;
+
+    // Snap dragged field to grid
+    final snappedPosition = MagneticCardSystem.getMagneticSnapPosition(
+      config.position,
+      containerWidth,
+    );
+
+    setState(() {
+      _fieldConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
+        position: snappedPosition,
+      );
+      _draggedFieldId = null;
+      _dragStartPosition = null;
+      _dragStartFieldPosition = null;
+      _hoveredColumn = null;
+      _hoveredRow = null;
+      _hasMovedBeyondThreshold = false; // Reset threshold flag
+      _originalPositions.clear();
+      // Don't clear _temporarilyMovedFields - let hover positions become permanent
+      _temporarilyMovedFields.clear();
+    });
+
+    // After positioning the field, check for empty rows and pull up fields to fill gaps
+    _pullUpFieldsToFillGaps();
+    _saveFieldConfigurations();
   }
 
   void _onResizeField(
@@ -947,6 +1489,25 @@ class CustomizableFormState extends State<CustomizableForm> {
     }
   }
 
+  void _showAutoResizeMessage(String message) {
+    setState(() {
+      _autoResizeMessage = message;
+      _autoResizeTime = DateTime.now();
+    });
+
+    // Clear the message after 3 seconds
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted &&
+          _autoResizeTime != null &&
+          DateTime.now().difference(_autoResizeTime!).inSeconds >= 3) {
+        setState(() {
+          _autoResizeMessage = null;
+          _autoResizeTime = null;
+        });
+      }
+    });
+  }
+
   void _toggleAdditionalField(String fieldId) {
     setState(() {
       final config = _fieldConfigs[fieldId];
@@ -971,7 +1532,7 @@ class CustomizableFormState extends State<CustomizableForm> {
         debugPrint('📊 BEFORE REFLOW (after removal):');
         _debugRowStatus();
 
-        _reflowFieldsUpward();
+        _pullUpFieldsToFillGaps();
 
         debugPrint('📊 AFTER REFLOW (after removal):');
         _debugRowStatus();
@@ -985,22 +1546,6 @@ class CustomizableFormState extends State<CustomizableForm> {
       }
     });
     _saveFieldConfigurations();
-  }
-
-  void _reflowFieldsUpward() {
-    var sortedFields =
-        _fieldConfigs.entries.toList()
-          ..sort((a, b) => a.value.position.dy.compareTo(b.value.position.dy));
-
-    double currentY = 0;
-    for (var entry in sortedFields) {
-      if (entry.value.position.dx == 0) {
-        _fieldConfigs[entry.key] = entry.value.copyWith(
-          position: Offset(0, currentY),
-        );
-        currentY += MagneticCardSystem.cardHeight;
-      }
-    }
   }
 
   void _addFieldToSingleColumn(String fieldId) {
@@ -1019,144 +1564,5 @@ class CustomizableFormState extends State<CustomizableForm> {
       position: Offset(0, nextRow * 70.0),
       width: 1.0,
     );
-  }
-
-  void _startFieldDrag(String fieldId) {
-    HapticFeedback.mediumImpact();
-    final config = _fieldConfigs[fieldId]!;
-    setState(() {
-      _selectedFieldId = fieldId;
-      _dragStartPosition = null;
-      _dragStartFieldPosition = config.position;
-    });
-  }
-
-  void _onFieldDrag(String fieldId, LongPressMoveUpdateDetails details) {
-    final config = _fieldConfigs[fieldId]!;
-    final containerWidth = MediaQuery.of(context).size.width - 32;
-
-    // Initialize drag start position if not set
-    _dragStartPosition ??= details.globalPosition;
-
-    // Calculate the delta from the start position
-    final deltaX =
-        (details.globalPosition.dx - _dragStartPosition!.dx) / containerWidth;
-    final deltaY = details.globalPosition.dy - _dragStartPosition!.dy;
-
-    // Calculate new position
-    final newX = (_dragStartFieldPosition!.dx + deltaX).clamp(
-      0.0,
-      1.0 - config.width,
-    );
-    final newY = (_dragStartFieldPosition!.dy + deltaY).clamp(
-      0.0,
-      MagneticCardSystem.maxRows * MagneticCardSystem.cardHeight,
-    );
-
-    final newPosition = Offset(newX, newY);
-
-    // Update position based on the initial field position plus delta
-    setState(() {
-      _fieldConfigs[fieldId] = config.copyWith(position: newPosition);
-    });
-  }
-
-  void _onFieldDragEnd(String fieldId) {
-    final config = _fieldConfigs[fieldId]!;
-    final containerWidth = MediaQuery.of(context).size.width - 32;
-
-    debugPrint('\n🎯 DRAG END for $fieldId');
-    debugPrint(
-      'Current position: (${config.position.dx.toStringAsFixed(2)}, ${config.position.dy.toStringAsFixed(0)})',
-    );
-    debugPrint('Current width: ${config.width.toStringAsFixed(2)}');
-
-    // Reset drag tracking
-    _dragStartPosition = null;
-    _dragStartFieldPosition = null;
-
-    // Calculate initial magnetic position
-    final currentPos = Offset(
-      config.position.dx * containerWidth,
-      config.position.dy,
-    );
-
-    final magneticPos = MagneticCardSystem.getMagneticSnapPosition(
-      currentPos,
-      containerWidth,
-    );
-    debugPrint(
-      'Magnetic snap position: (${magneticPos.dx.toStringAsFixed(0)}, ${magneticPos.dy.toStringAsFixed(0)})',
-    );
-
-    // Ensure the magnetic position doesn't push the field off the right edge
-    final maxX =
-        (containerWidth - (config.width * containerWidth)) / containerWidth;
-    final snappedX = (magneticPos.dx / containerWidth).clamp(0.0, maxX);
-
-    final proposedPosition = Offset(
-      snappedX,
-      magneticPos.dy.clamp(
-        0.0,
-        MagneticCardSystem.maxRows * MagneticCardSystem.cardHeight,
-      ),
-    );
-
-    debugPrint(
-      'Proposed position: (${proposedPosition.dx.toStringAsFixed(2)}, ${proposedPosition.dy.toStringAsFixed(0)})',
-    );
-
-    // Check for collisions and find alternative position if needed
-    Offset finalPosition;
-    final wouldCollide = MagneticCardSystem.wouldOverlap(
-      proposedPosition,
-      config.width,
-      containerWidth,
-      _fieldConfigs,
-      fieldId,
-    );
-    debugPrint('Would overlap: $wouldCollide');
-
-    if (wouldCollide) {
-      debugPrint('🚨 COLLISION DETECTED! Finding alternative position...');
-      // Find next available position starting from the proposed row
-      final proposedRow = MagneticCardSystem.getRowFromPosition(
-        proposedPosition.dy,
-      );
-      finalPosition = MagneticCardSystem.findNextAvailablePosition(
-        config.width,
-        containerWidth,
-        _fieldConfigs,
-        fieldId,
-        startFromRow: proposedRow,
-      );
-
-      debugPrint(
-        'Alternative position found: (${finalPosition.dx.toStringAsFixed(2)}, ${finalPosition.dy.toStringAsFixed(0)})',
-      );
-
-      // Provide haptic feedback for collision
-      HapticFeedback.lightImpact();
-    } else {
-      finalPosition = proposedPosition;
-      debugPrint('✅ No collision, using proposed position');
-    }
-
-    setState(() {
-      _fieldConfigs[fieldId] = config.copyWith(position: finalPosition);
-
-      // Debug before reflow
-      debugPrint('\n📊 BEFORE REFLOW:');
-      _debugRowStatus();
-
-      // After updating the dragged field's position, reflow all fields to fill gaps
-      _reflowFieldsUpward();
-
-      // Debug after reflow
-      debugPrint('📊 AFTER REFLOW:');
-      _debugRowStatus();
-    });
-
-    _saveFieldConfigurations();
   }
 }
