@@ -102,9 +102,7 @@ class MagneticCardSystem {
     // 6-column grid: proper boundary detection
     // Column boundaries: 0-0.167, 0.167-0.333, 0.333-0.5, 0.5-0.667, 0.667-0.833, 0.833-1.0
     final column = (xPosition * 6).floor().clamp(0, 5);
-    debugPrint(
-      '🔢 Position ${xPosition.toStringAsFixed(3)} → Column $column (${xPosition * 6})',
-    );
+    // Only debug when explicitly requested (removed automatic debug spam)
     return column;
   }
 
@@ -372,6 +370,9 @@ class CustomizableFormState extends State<CustomizableForm> {
   // Hover state for push down logic
   int? _hoveredColumn;
   int? _hoveredRow;
+  
+  // Throttling for rearrangement to prevent excessive calls
+  DateTime? _lastRearrangementTime;
 
   // Auto-resize feedback
   String? _autoResizeMessage;
@@ -1153,20 +1154,7 @@ class CustomizableFormState extends State<CustomizableForm> {
       }
     });
 
-    debugPrint('Original positions stored:');
-    final containerWidth = MediaQuery.of(context).size.width - 32;
-    for (final entry in _originalPositions.entries) {
-      final pos = entry.value;
-      final col = MagneticCardSystem.getColumnFromPosition(
-        pos.dx,
-        containerWidth,
-      );
-      final row = MagneticCardSystem.getRowFromPosition(pos.dy);
-      debugPrint(
-        '  ${entry.key}: (${pos.dx.toStringAsFixed(2)},${pos.dy.toStringAsFixed(0)}) → col:$col, row:$row',
-      );
-    }
-    debugPrint('🚀 DRAG START COMPLETE\n');
+    debugPrint('🚀 DRAG START: $fieldId - Original positions stored for ${_originalPositions.length} fields');
   }
 
   void _onFieldDrag(String fieldId, LongPressMoveUpdateDetails details) {
@@ -1235,12 +1223,19 @@ class CustomizableFormState extends State<CustomizableForm> {
 
     // Trigger rearrangement after setState to avoid nested setState calls
     if (needsRearrangement) {
-      // Use post-frame callback to avoid performance issues
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _pushDownAllFieldsAtRow(hoveredRow, fieldId);
-        }
-      });
+      // Throttle rearrangement to prevent excessive calls (max once per 100ms)
+      final now = DateTime.now();
+      if (_lastRearrangementTime == null || 
+          now.difference(_lastRearrangementTime!).inMilliseconds > 100) {
+        _lastRearrangementTime = now;
+        
+        // Use post-frame callback to avoid performance issues
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _pushDownAllFieldsAtRow(hoveredRow, fieldId);
+          }
+        });
+      }
     }
   }
 
@@ -1292,22 +1287,67 @@ class CustomizableFormState extends State<CustomizableForm> {
 
     if (direction == ResizeDirection.right) {
       // Right resize: Only change width
+      debugPrint('🔍 RIGHT RESIZE DEBUG:');
+      debugPrint('  _accumulatedDrag: $_accumulatedDrag');
+      debugPrint('  currentIndex: $currentIndex');
+      debugPrint('  cardWidths.length: ${MagneticCardSystem.cardWidths.length}');
+      
       if (_accumulatedDrag > 0 &&
           currentIndex < MagneticCardSystem.cardWidths.length - 1) {
-        newWidth = MagneticCardSystem.cardWidths[currentIndex + 1];
+        final candidateWidth = MagneticCardSystem.cardWidths[currentIndex + 1];
+        final startColumn = MagneticCardSystem.getColumnFromPosition(
+          config.position.dx,
+          containerWidth,
+        );
+        final candidateSpan = MagneticCardSystem.getActualColumnSpan(
+          candidateWidth,
+          startColumn,
+        );
+        
+        debugPrint('  Candidate width: ${candidateWidth.toStringAsFixed(2)}');
+        debugPrint('  Start column: $startColumn');
+        debugPrint('  Candidate span: $candidateSpan');
+        debugPrint('  Would end at: ${startColumn + candidateSpan}');
+        
+        // Calculate the correct width for the actual span that will be used
+        final actualWidth = candidateSpan / 6.0; // Convert span to width percentage
+        
+        debugPrint('  ✅ RESIZE ALLOWED');
+        debugPrint('  Original candidate width: ${candidateWidth.toStringAsFixed(2)}');
+        debugPrint('  Actual width for ${candidateSpan} columns: ${actualWidth.toStringAsFixed(2)}');
+        
+        newWidth = actualWidth;
       } else if (_accumulatedDrag < 0 && currentIndex > 0) {
+        debugPrint('  Shrinking resize');
         newWidth = MagneticCardSystem.cardWidths[currentIndex - 1];
+      } else {
+        debugPrint('  No resize conditions met');
       }
     } else {
       // Left resize: Change both width and x position
       if (_accumulatedDrag < 0 &&
           currentIndex < MagneticCardSystem.cardWidths.length - 1) {
         // Expanding left
-        if (newX > 0) {
-          // Only if there's space to expand left
-          newWidth = MagneticCardSystem.cardWidths[currentIndex + 1];
-          newX = max(0, newX - (newWidth - config.width));
-        }
+        final candidateWidth = MagneticCardSystem.cardWidths[currentIndex + 1];
+        final candidateX = max(0.0, newX - (candidateWidth - config.width));
+        final candidateStartColumn = MagneticCardSystem.getColumnFromPosition(
+          candidateX,
+          containerWidth,
+        );
+        final candidateSpan = MagneticCardSystem.getActualColumnSpan(
+          candidateWidth,
+          candidateStartColumn,
+        );
+        
+        // Calculate the correct width for the actual span that will be used
+        final actualWidth = candidateSpan / 6.0; // Convert span to width percentage
+        
+        debugPrint('  ✅ LEFT RESIZE ALLOWED');
+        debugPrint('  Original candidate width: ${candidateWidth.toStringAsFixed(2)}');
+        debugPrint('  Actual width for ${candidateSpan} columns: ${actualWidth.toStringAsFixed(2)}');
+        
+        newWidth = actualWidth;
+        newX = candidateX;
       } else if (_accumulatedDrag > 0 && currentIndex > 0) {
         // Shrinking from left
         newWidth = MagneticCardSystem.cardWidths[currentIndex - 1];
@@ -1325,6 +1365,27 @@ class CustomizableFormState extends State<CustomizableForm> {
           position: Offset(newX, config.position.dy),
         );
       });
+
+      // Debug output after resize
+      debugPrint('\n🔄 FIELD RESIZED: $fieldId');
+      debugPrint(
+        'Old width: ${config.width.toStringAsFixed(2)}, New width: ${newWidth.toStringAsFixed(2)}',
+      );
+      debugPrint(
+        'Old position: (${config.position.dx.toStringAsFixed(2)}, ${config.position.dy.toStringAsFixed(0)})',
+      );
+      debugPrint(
+        'New position: (${newX.toStringAsFixed(2)}, ${config.position.dy.toStringAsFixed(0)})',
+      );
+
+      // Show updated row status after resize
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          debugPrint('\n📊 AFTER RESIZE:');
+          _debugRowStatus();
+        }
+      });
+
       _saveFieldConfigurations();
       HapticFeedback.mediumImpact();
     }
