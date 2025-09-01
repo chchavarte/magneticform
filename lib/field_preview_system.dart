@@ -288,7 +288,7 @@ class FieldPreviewSystem {
   }
 
   // Calculate total available space in a row (sum of all unoccupied space)
-  static double _calculateTotalAvailableSpace({
+  static double calculateTotalAvailableSpace({
     required int targetRow,
     required String excludeFieldId,
     required Map<String, FieldConfig> currentConfigs,
@@ -308,6 +308,19 @@ class FieldPreviewSystem {
     
     // Available space is what's left (1.0 = 100% width)
     return (1.0 - totalOccupied).clamp(0.0, 1.0);
+  }
+
+  // Private version for internal use
+  static double _calculateTotalAvailableSpace({
+    required int targetRow,
+    required String excludeFieldId,
+    required Map<String, FieldConfig> currentConfigs,
+  }) {
+    return calculateTotalAvailableSpace(
+      targetRow: targetRow,
+      excludeFieldId: excludeFieldId,
+      currentConfigs: currentConfigs,
+    );
   }
 
   // Find the best width to fill available space

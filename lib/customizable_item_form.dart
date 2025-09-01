@@ -325,6 +325,261 @@ class CustomizableFormState extends State<CustomizableForm>
     }
   }
 
+  // Auto-expand fields to fill remaining gaps after drag operations
+  void _autoExpandToFillGaps() {
+    print('\n🔧 AUTO-EXPAND TO FILL GAPS');
+    
+    // Find all rows that have fields
+    Map<int, List<String>> fieldsByRow = {};
+    for (final entry in _fieldConfigs.entries) {
+      final fieldId = entry.key;
+      final config = entry.value;
+      if (!config.isVisible) continue;
+
+      final row = MagneticCardSystem.getRowFromPosition(config.position.dy);
+      fieldsByRow.putIfAbsent(row, () => []).add(fieldId);
+    }
+
+    Map<String, FieldConfig> expandedConfigs = {};
+    bool hasExpansions = false;
+
+    // Check each row for gaps and expand fields
+    for (final entry in fieldsByRow.entries) {
+      final row = entry.key;
+      final fieldsInRow = entry.value;
+      
+      print('Checking row $row with ${fieldsInRow.length} fields');
+      
+      // Calculate available space in this row
+      final availableSpace = FieldPreviewSystem.calculateTotalAvailableSpace(
+        targetRow: row,
+        excludeFieldId: '', // Don't exclude any field
+        currentConfigs: _fieldConfigs,
+      );
+      
+      print('  Available space: ${(availableSpace * 100).toInt()}%');
+      
+      if (availableSpace > 0.05) { // If there's significant space (>5%)
+        // Find the best expansion strategy
+        final expansionStrategy = _findBestExpansionStrategy(row, fieldsInRow, availableSpace);
+        
+        if (expansionStrategy != null) {
+          // Apply the expansion strategy to all affected fields
+          for (final entry in expansionStrategy.entries) {
+            final fieldId = entry.key;
+            final newWidth = entry.value;
+            final currentConfig = _fieldConfigs[fieldId]!;
+            
+            if ((newWidth - currentConfig.width).abs() > 0.01) { // Only if significant change
+              print('  Updating $fieldId: ${(currentConfig.width * 100).toInt()}% → ${(newWidth * 100).toInt()}%');
+              
+              // For equal redistribution, we need to recalculate positions
+              if (expansionStrategy.length > 1) {
+                // Multiple fields being redistributed - calculate new positions
+                final sortedFields = fieldsInRow.toList();
+                sortedFields.sort((a, b) => _fieldConfigs[a]!.position.dx.compareTo(_fieldConfigs[b]!.position.dx));
+                
+                double currentX = 0.0;
+                for (int i = 0; i < sortedFields.length; i++) {
+                  final sortedFieldId = sortedFields[i];
+                  if (expansionStrategy.containsKey(sortedFieldId)) {
+                    final fieldWidth = expansionStrategy[sortedFieldId]!;
+                    final newPosition = Offset(currentX, row * MagneticCardSystem.cardHeight);
+                    
+                    expandedConfigs[sortedFieldId] = _fieldConfigs[sortedFieldId]!.copyWith(
+                      width: fieldWidth,
+                      position: newPosition,
+                    );
+                    
+                    currentX += fieldWidth;
+                    hasExpansions = true;
+                  }
+                }
+              } else {
+                // Single field expansion - position at start of row for 100% width
+                final newPosition = newWidth >= 0.99 
+                    ? Offset(0.0, row * MagneticCardSystem.cardHeight)
+                    : currentConfig.position;
+                    
+                expandedConfigs[fieldId] = currentConfig.copyWith(
+                  width: newWidth,
+                  position: newPosition,
+                );
+                hasExpansions = true;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Apply expansions with animation
+    if (hasExpansions) {
+      print('Applying ${expandedConfigs.length} field expansions');
+      
+      // Create final configs with expansions
+      final finalConfigs = Map<String, FieldConfig>.from(_fieldConfigs);
+      for (final entry in expandedConfigs.entries) {
+        finalConfigs[entry.key] = entry.value;
+      }
+      
+      // Animate the expansions
+      FieldPreviewSystem.animateToCommit(
+        vsync: this,
+        fromConfigs: _fieldConfigs,
+        toConfigs: finalConfigs,
+        onUpdate: (configs) {
+          setState(() {
+            _fieldConfigs = configs;
+          });
+        },
+        onComplete: () {
+          print('Auto-expansion complete');
+        },
+      );
+    } else {
+      print('No gaps found to fill');
+    }
+  }
+
+  // Calculate total available space in a row
+  double _calculateTotalAvailableSpace({
+    required int targetRow,
+    required String excludeFieldId,
+    required Map<String, FieldConfig> currentConfigs,
+  }) {
+    double totalOccupied = 0.0;
+    
+    // Sum up all occupied space in the target row (excluding specified field)
+    for (final entry in currentConfigs.entries) {
+      if (entry.key == excludeFieldId) continue;
+      
+      final config = entry.value;
+      final fieldRow = MagneticCardSystem.getRowFromPosition(config.position.dy);
+      if (fieldRow == targetRow) {
+        totalOccupied += config.width;
+      }
+    }
+    
+    // Available space is what's left (1.0 = 100% width)
+    return (1.0 - totalOccupied).clamp(0.0, 1.0);
+  }
+
+  // Find the best expansion strategy for fields in a row
+  Map<String, double>? _findBestExpansionStrategy(int row, List<String> fieldsInRow, double availableSpace) {
+    if (fieldsInRow.isEmpty) return null;
+    
+    // If only one field, expand it to fill the row
+    if (fieldsInRow.length == 1) {
+      print('  Single field in row, expanding ${fieldsInRow.first} to 100%');
+      return {fieldsInRow.first: 1.0};
+    }
+    
+    // Check if all fields have equal or similar widths (within 5% tolerance)
+    final fieldWidths = fieldsInRow.map((id) => _fieldConfigs[id]!.width).toList();
+    final avgWidth = fieldWidths.reduce((a, b) => a + b) / fieldWidths.length;
+    final isEqualWidths = fieldWidths.every((width) => (width - avgWidth).abs() < 0.05);
+    
+    print('  Field widths: ${fieldWidths.map((w) => '${(w * 100).toInt()}%').join(', ')}');
+    print('  Average width: ${(avgWidth * 100).toInt()}%, Equal widths: $isEqualWidths');
+    
+    if (isEqualWidths) {
+      // Equal widths: redistribute equally among remaining fields
+      print('  Equal widths detected - redistributing equally');
+      final newWidth = 1.0 / fieldsInRow.length; // Distribute 100% equally
+      final redistributions = <String, double>{};
+      
+      for (final fieldId in fieldsInRow) {
+        redistributions[fieldId] = newWidth;
+      }
+      
+      print('  New equal distribution: ${(newWidth * 100).toInt()}% each');
+      return redistributions;
+    } else {
+      // Unequal widths: use gap-filling strategy (original logic)
+      print('  Unequal widths detected - using gap-filling strategy');
+      final closestField = _findClosestFieldToLargestGap(row, fieldsInRow);
+      
+      if (closestField != null) {
+        final currentWidth = _fieldConfigs[closestField]!.width;
+        final newWidth = (currentWidth + availableSpace).clamp(0.0, 1.0);
+        final snappedWidth = MagneticCardSystem.getMagneticWidth(newWidth);
+        
+        return {closestField: snappedWidth};
+      }
+    }
+    
+    return null;
+  }
+
+  // Find the field closest to the largest gap (original logic for unequal widths)
+  String? _findClosestFieldToLargestGap(int row, List<String> fieldsInRow) {
+    final gaps = _findGapsInRow(row, fieldsInRow);
+    if (gaps.isEmpty) return null;
+    
+    // Find the largest gap
+    var largestGap = gaps.reduce((a, b) => a.size > b.size ? a : b);
+    print('  Largest gap: ${(largestGap.size * 100).toInt()}% at position ${largestGap.position}');
+    
+    // Find the closest field to this gap
+    String? closestField;
+    double minDistance = double.infinity;
+    
+    for (final fieldId in fieldsInRow) {
+      final config = _fieldConfigs[fieldId]!;
+      final fieldCenter = config.position.dx + (config.width / 2);
+      final gapCenter = largestGap.position + (largestGap.size / 2);
+      final distance = (fieldCenter - gapCenter).abs();
+      
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestField = fieldId;
+      }
+    }
+    
+    print('  Closest field to gap: $closestField (distance: ${(minDistance * 100).toInt()}%)');
+    return closestField;
+  }
+
+  // Find gaps in a row
+  List<({double position, double size})> _findGapsInRow(int row, List<String> fieldsInRow) {
+    final gaps = <({double position, double size})>[];
+    
+    // Get field positions and sort by x position
+    final fieldConfigs = fieldsInRow
+        .map((id) => _fieldConfigs[id]!)
+        .where((config) => MagneticCardSystem.getRowFromPosition(config.position.dy) == row)
+        .toList();
+    
+    fieldConfigs.sort((a, b) => a.position.dx.compareTo(b.position.dx));
+    
+    // Check gap at the beginning
+    if (fieldConfigs.isNotEmpty && fieldConfigs.first.position.dx > 0) {
+      gaps.add((position: 0.0, size: fieldConfigs.first.position.dx));
+    }
+    
+    // Check gaps between fields
+    for (int i = 0; i < fieldConfigs.length - 1; i++) {
+      final currentEnd = fieldConfigs[i].position.dx + fieldConfigs[i].width;
+      final nextStart = fieldConfigs[i + 1].position.dx;
+      final gapSize = nextStart - currentEnd;
+      
+      if (gapSize > 0.05) { // Only consider significant gaps (>5%)
+        gaps.add((position: currentEnd, size: gapSize));
+      }
+    }
+    
+    // Check gap at the end
+    if (fieldConfigs.isNotEmpty) {
+      final lastEnd = fieldConfigs.last.position.dx + fieldConfigs.last.width;
+      if (lastEnd < 0.95) { // If not at the very end
+        gaps.add((position: lastEnd, size: 1.0 - lastEnd));
+      }
+    }
+    
+    return gaps;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -938,6 +1193,8 @@ class CustomizableFormState extends State<CustomizableForm>
       },
       onComplete: () {
         _pullUpFieldsToFillGaps();
+        // Auto-expand fields to fill remaining gaps
+        _autoExpandToFillGaps();
         _saveFieldConfigurations();
       },
     );
