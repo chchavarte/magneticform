@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'dart:math';
 import 'field_resize_handler.dart';
 import 'form_models.dart';
-import 'field_animations.dart';
+import 'field_preview_system.dart';
 
 // Main customizable form widget
 class CustomizableForm extends StatefulWidget {
@@ -50,6 +50,9 @@ class CustomizableFormState extends State<CustomizableForm>
   // Auto-resize feedback
   String? _autoResizeMessage;
   DateTime? _autoResizeTime;
+
+  // Preview system state
+  PreviewState _previewState = PreviewState.initial();
 
   // Magnetic timeline: Store original positions for restoration
   final Map<String, Offset> _originalPositions = {};
@@ -396,6 +399,9 @@ class CustomizableFormState extends State<CustomizableForm>
                     children: [
                       if (_isCustomizationMode) _buildSnapGuides(),
 
+                      // Preview target indicator
+                      if (_isCustomizationMode) _buildPreviewIndicator(),
+
                       ..._fieldConfigs.keys.map((fieldId) {
                         final matchingField = widget.availableFields.where(
                           (f) => f.id == fieldId,
@@ -511,6 +517,8 @@ class CustomizableFormState extends State<CustomizableForm>
 
     final isSelected = _selectedFieldId == fieldId;
     final isDragged = _draggedFieldId == fieldId;
+    final isInPreview =
+        _previewState.isActive && fieldId != _previewState.draggedFieldId;
     final containerWidth = _containerWidth;
 
     final fieldWidth = config.width * containerWidth;
@@ -561,6 +569,26 @@ class CustomizableFormState extends State<CustomizableForm>
                               ),
                               blurRadius: 12,
                               offset: const Offset(0, 4),
+                            ),
+                          ],
+                        )
+                        : isInPreview
+                        ? BoxDecoration(
+                          border: Border.all(
+                            color: _theme.colorScheme.secondary,
+                            width: 2,
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                          color: _theme.colorScheme.secondary.withValues(
+                            alpha: 0.1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: _theme.colorScheme.secondary.withValues(
+                                alpha: 0.2,
+                              ),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
                             ),
                           ],
                         )
@@ -631,6 +659,9 @@ class CustomizableFormState extends State<CustomizableForm>
       _dragStartFieldPosition = config.position;
       _hasMovedBeyondThreshold = false; // Reset threshold flag
 
+      // Initialize preview state
+      _previewState = PreviewState.initial();
+
       // Store original positions of all fields at drag start
       _originalPositions.clear();
       _temporarilyMovedFields.clear();
@@ -660,7 +691,7 @@ class CustomizableFormState extends State<CustomizableForm>
         (details.globalPosition.dx - _dragStartPosition!.dx) / containerWidth;
     final deltaY = details.globalPosition.dy - _dragStartPosition!.dy;
 
-    // Calculate new position
+    // Calculate new position for visual feedback (dragged field follows cursor)
     final newX = (_dragStartFieldPosition!.dx + deltaX).clamp(
       0.0,
       1.0 - config.width,
@@ -680,64 +711,248 @@ class CustomizableFormState extends State<CustomizableForm>
     final hoveredColumn = gridPosition.column;
     final hoveredRow = gridPosition.row;
 
-    bool needsRearrangement = false;
-
-    // Only trigger hover effects if we've moved beyond the threshold
-    if (_hasMovedBeyondThreshold) {
-      // Check if hovered ROW changed (ignore column changes)
-      if (_hoveredRow != hoveredRow) {
-        _hoveredColumn = hoveredColumn;
-        _hoveredRow = hoveredRow;
-        needsRearrangement = true;
-      } else {
-        // Just update column for display
-        _hoveredColumn = hoveredColumn;
-      }
-    }
-
-    // Single setState with all updates
+    // Update dragged field position for visual feedback
     setState(() {
-      // Update dragged field position (preserve any width changes from auto-resize)
       final currentWidth = _fieldConfigs[fieldId]!.width;
       _fieldConfigs[fieldId] = config.copyWith(
         position: newPosition,
-        width: currentWidth, // Preserve width changes from auto-resize
+        width: currentWidth,
       );
+      _hoveredColumn = hoveredColumn;
+      _hoveredRow = hoveredRow;
     });
 
-    // Trigger rearrangement after setState to avoid nested setState calls
-    if (needsRearrangement) {
-      // Throttle rearrangement to prevent excessive calls (max once per 100ms)
-      final now = DateTime.now();
-      if (_lastRearrangementTime == null ||
-          now.difference(_lastRearrangementTime!).inMilliseconds > 100) {
-        _lastRearrangementTime = now;
-
-        // Use post-frame callback to avoid performance issues
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            _pushDownAllFieldsAtRow(hoveredRow, fieldId);
-          }
-        });
-      }
+    // Handle preview logic if we've moved beyond threshold
+    if (_hasMovedBeyondThreshold) {
+      _handlePreviewLogic(fieldId, hoveredRow);
     }
   }
 
+  // Handle preview logic for hover effects
+  void _handlePreviewLogic(String fieldId, int hoveredRow) {
+    // Throttle preview updates to prevent excessive calls
+    final now = DateTime.now();
+    if (_lastRearrangementTime != null &&
+        now.difference(_lastRearrangementTime!).inMilliseconds < 100) {
+      return;
+    }
+    _lastRearrangementTime = now;
+
+    // Check if we're hovering over a new row
+    if (_previewState.targetRow != hoveredRow) {
+      // Always show preview - either direct placement or push down
+      _showPreview(fieldId, hoveredRow);
+    }
+  }
+
+  // Show preview positions
+  void _showPreview(String fieldId, int targetRow) {
+    print('\n🎯 DRAG PREVIEW: Field $fieldId targeting row $targetRow');
+    print('Current field configs before preview:');
+    for (final entry in _fieldConfigs.entries) {
+      final config = entry.value;
+      final row = MagneticCardSystem.getRowFromPosition(config.position.dy);
+      final startCol = MagneticCardSystem.getColumnFromPosition(config.position.dx, _containerWidth);
+      final span = MagneticCardSystem.getColumnsFromWidth(config.width);
+      print('  ${entry.key}: Row $row, Columns $startCol-${startCol + span - 1}, Width ${(config.width * 100).toInt()}%');
+    }
+    
+    final originalConfigs =
+        _previewState.originalConfigs.isNotEmpty
+            ? _previewState.originalConfigs
+            : Map<String, FieldConfig>.from(_fieldConfigs);
+
+    print('Calling FieldPreviewSystem.calculatePreviewPositions...');
+    final previewConfigs = FieldPreviewSystem.calculatePreviewPositions(
+      targetRow: targetRow,
+      draggedFieldId: fieldId,
+      currentConfigs: originalConfigs,
+      containerWidth: _containerWidth,
+    );
+
+    print('Calling FieldPreviewSystem.getPreviewInfo...');
+    final previewInfo = FieldPreviewSystem.getPreviewInfo(
+      targetRow: targetRow,
+      draggedFieldId: fieldId,
+      currentConfigs: originalConfigs,
+      containerWidth: _containerWidth,
+    );
+    
+    print('Preview result: ${previewInfo.message}');
+    print('Preview configs returned:');
+    for (final entry in previewConfigs.entries) {
+      final config = entry.value;
+      final row = MagneticCardSystem.getRowFromPosition(config.position.dy);
+      final startCol = MagneticCardSystem.getColumnFromPosition(config.position.dx, _containerWidth);
+      final span = MagneticCardSystem.getColumnsFromWidth(config.width);
+      print('  ${entry.key}: Row $row, Columns $startCol-${startCol + span - 1}, Width ${(config.width * 100).toInt()}%');
+    }
+
+    // Update preview state
+    _previewState = PreviewState.active(
+      draggedFieldId: fieldId,
+      targetRow: targetRow,
+      previewConfigs: previewConfigs,
+      originalConfigs: originalConfigs,
+      previewInfo: previewInfo,
+    );
+
+    // Animate to preview positions (excluding the dragged field which follows cursor)
+    final animationConfigs = Map<String, FieldConfig>.from(previewConfigs);
+    animationConfigs[fieldId] =
+        _fieldConfigs[fieldId]!; // Keep dragged field at cursor position
+
+    FieldPreviewSystem.animateToPreview(
+      vsync: this,
+      fromConfigs: _fieldConfigs,
+      toConfigs: animationConfigs,
+      onUpdate: (configs) {
+        setState(() {
+          _fieldConfigs = configs;
+        });
+      },
+    );
+
+    // Show preview feedback
+    _showAutoResizeMessage(previewInfo.message);
+  }
+
+  // Build preview target indicator
+  Widget _buildPreviewIndicator() {
+    if (!_previewState.isActive ||
+        _previewState.previewInfo?.targetPosition == null ||
+        _previewState.previewInfo?.hasSpace != true) {
+      return const SizedBox.shrink();
+    }
+
+    final targetPosition = _previewState.previewInfo!.targetPosition!;
+    final containerWidth = _containerWidth;
+    final draggedField = _fieldConfigs[_previewState.draggedFieldId!]!;
+
+    final fieldWidth = draggedField.width * containerWidth;
+    final leftPosition = targetPosition.dx * containerWidth;
+
+    return Positioned(
+      left: leftPosition,
+      top: targetPosition.dy + 8,
+      child: Container(
+        width:
+            fieldWidth -
+            (targetPosition.dx > 0 ? MagneticCardSystem.fieldGap : 0),
+        height: MagneticCardSystem.cardHeight,
+        margin: EdgeInsets.only(
+          left: targetPosition.dx > 0 ? MagneticCardSystem.fieldGap : 0,
+        ),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: _theme.colorScheme.primary.withValues(alpha: 0.6),
+            width: 2,
+            style: BorderStyle.solid,
+          ),
+          borderRadius: BorderRadius.circular(8),
+          color: _theme.colorScheme.primary.withValues(alpha: 0.1),
+        ),
+        child: Center(
+          child: Icon(
+            Icons.place,
+            color: _theme.colorScheme.primary.withValues(alpha: 0.7),
+            size: 24,
+          ),
+        ),
+      ),
+    );
+  }
+
   void _onFieldDragEnd(String fieldId, LongPressEndDetails details) {
+    if (_previewState.isActive && _previewState.previewInfo?.hasSpace == true) {
+      // Commit preview positions
+      _commitPreview(fieldId);
+    } else {
+      // No preview or no space - use standard snap logic
+      _handleStandardDragEnd(fieldId);
+    }
+
+    // Clean up drag state
+    setState(() {
+      _draggedFieldId = null;
+      _dragStartPosition = null;
+      _dragStartFieldPosition = null;
+      _hoveredColumn = null;
+      _hoveredRow = null;
+      _hasMovedBeyondThreshold = false;
+      _originalPositions.clear();
+      _temporarilyMovedFields.clear();
+    });
+
+    _previewState = PreviewState.initial();
+  }
+
+  // Commit preview positions with animation
+  void _commitPreview(String fieldId) {
+    print('\n✅ COMMIT PREVIEW: Field $fieldId');
+    if (!_previewState.isActive ||
+        _previewState.previewInfo?.targetPosition == null) {
+      print('No active preview, using standard drag end');
+      _handleStandardDragEnd(fieldId);
+      return;
+    }
+
+    print('Committing preview positions...');
+    print('Preview info: ${_previewState.previewInfo!.message}');
+    
+    // Create final configs with the dragged field at the preview position
+    final finalConfigs = Map<String, FieldConfig>.from(
+      _previewState.previewConfigs,
+    );
+    
+    // Check if the preview included a width change for the dragged field
+    final previewDraggedField = _previewState.previewConfigs[fieldId];
+    if (previewDraggedField != null) {
+      print('Using preview config for $fieldId: width ${(previewDraggedField.width * 100).toInt()}%, position ${previewDraggedField.position}');
+      finalConfigs[fieldId] = previewDraggedField;
+    } else {
+      print('No preview config found, using target position only');
+      finalConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
+        position: _previewState.previewInfo!.targetPosition!,
+      );
+    }
+    
+    print('Final configs to commit:');
+    for (final entry in finalConfigs.entries) {
+      final config = entry.value;
+      final row = MagneticCardSystem.getRowFromPosition(config.position.dy);
+      final startCol = MagneticCardSystem.getColumnFromPosition(config.position.dx, _containerWidth);
+      final span = MagneticCardSystem.getColumnsFromWidth(config.width);
+      print('  ${entry.key}: Row $row, Columns $startCol-${startCol + span - 1}, Width ${(config.width * 100).toInt()}%');
+    }
+
+    // Animate to final positions
+    FieldPreviewSystem.animateToCommit(
+      vsync: this,
+      fromConfigs: _fieldConfigs,
+      toConfigs: finalConfigs,
+      onUpdate: (configs) {
+        setState(() {
+          _fieldConfigs = configs;
+        });
+      },
+      onComplete: () {
+        _pullUpFieldsToFillGaps();
+        _saveFieldConfigurations();
+      },
+    );
+  }
+
+  // Handle standard drag end without preview
+  void _handleStandardDragEnd(String fieldId) {
     final containerWidth = _containerWidth;
     final config = _fieldConfigs[fieldId]!;
-
-    print(
-      'DEBUG DRAG END: Field $fieldId current position: ${config.position}',
-    );
 
     // Snap dragged field to grid
     final snappedPosition = MagneticCardSystem.getMagneticSnapPosition(
       config.position,
       containerWidth,
     );
-
-    print('DEBUG DRAG END: Snapped position: $snappedPosition');
 
     // Check if snapped position would cause overlap
     final wouldOverlap = MagneticCardSystem.wouldOverlap(
@@ -759,26 +974,12 @@ class CustomizableFormState extends State<CustomizableForm>
             )
             : snappedPosition;
 
-    print(
-      'DEBUG DRAG END: Final position: $finalPosition (overlap: $wouldOverlap)',
-    );
-
     setState(() {
       _fieldConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
         position: finalPosition,
       );
-      _draggedFieldId = null;
-      _dragStartPosition = null;
-      _dragStartFieldPosition = null;
-      _hoveredColumn = null;
-      _hoveredRow = null;
-      _hasMovedBeyondThreshold = false; // Reset threshold flag
-      _originalPositions.clear();
-      // Don't clear _temporarilyMovedFields - let hover positions become permanent
-      _temporarilyMovedFields.clear();
     });
 
-    // After positioning the field, check for empty rows and pull up fields to fill gaps
     _pullUpFieldsToFillGaps();
     _saveFieldConfigurations();
   }

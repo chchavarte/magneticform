@@ -171,7 +171,7 @@ class FieldAnimations {
       final fromConfig = fromConfigs[fieldId]!;
       final toConfig = toConfigs[fieldId]!;
       
-      animations[fieldId] = Tween<FieldConfig>(
+      animations[fieldId] = FieldConfigTween(
         begin: fromConfig,
         end: toConfig,
       ).animate(CurvedAnimation(
