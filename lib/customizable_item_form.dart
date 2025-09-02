@@ -396,10 +396,26 @@ class CustomizableFormState extends State<CustomizableForm>
                   }
                 }
               } else {
-                // Single field expansion - position at start of row for 100% width
-                final newPosition = newWidth >= 0.99 
-                    ? Offset(0.0, row * MagneticCardSystem.cardHeight)
-                    : currentConfig.position;
+                // Single field expansion - recalculate position to prevent overflow
+                Offset newPosition;
+                
+                if (newWidth >= 0.99) {
+                  // Full width - position at start of row
+                  newPosition = Offset(0.0, row * MagneticCardSystem.cardHeight);
+                } else {
+                  // Partial width - ensure field doesn't overflow beyond grid boundary
+                  final currentX = currentConfig.position.dx;
+                  final maxAllowedX = 1.0 - newWidth; // Maximum x position to prevent overflow
+                  
+                  if (currentX + newWidth > 1.0) {
+                    // Field would overflow - reposition it to fit within grid
+                    newPosition = Offset(maxAllowedX, row * MagneticCardSystem.cardHeight);
+                    print('  Repositioning $fieldId from ${(currentX * 100).toInt()}% to ${(maxAllowedX * 100).toInt()}% to prevent overflow');
+                  } else {
+                    // Field fits at current position
+                    newPosition = currentConfig.position;
+                  }
+                }
                     
                 expandedConfigs[fieldId] = currentConfig.copyWith(
                   width: newWidth,
@@ -496,17 +512,52 @@ class CustomizableFormState extends State<CustomizableForm>
       print('  New equal distribution: ${(newWidth * 100).toInt()}% each');
       return redistributions;
     } else {
-      // Unequal widths: use gap-filling strategy (original logic)
+      // Unequal widths: use gap-filling strategy with smart positioning
       print('  Unequal widths detected - using gap-filling strategy');
-      final closestField = _findClosestFieldToLargestGap(row, fieldsInRow);
+      final expansionResult = _findBestFieldExpansion(row, fieldsInRow, availableSpace);
       
-      if (closestField != null) {
-        final currentWidth = _fieldConfigs[closestField]!.width;
-        final newWidth = (currentWidth + availableSpace).clamp(0.0, 1.0);
-        final snappedWidth = MagneticCardSystem.getMagneticWidth(newWidth);
-        
-        return {closestField: snappedWidth};
+      if (expansionResult != null) {
+        return expansionResult;
       }
+    }
+    
+    return null;
+  }
+
+  // Find the best field expansion with smart positioning
+  Map<String, double>? _findBestFieldExpansion(int row, List<String> fieldsInRow, double availableSpace) {
+    final gaps = _findGapsInRow(row, fieldsInRow);
+    if (gaps.isEmpty) return null;
+    
+    // Find the largest gap
+    var largestGap = gaps.reduce((a, b) => a.size > b.size ? a : b);
+    print('  Largest gap: ${(largestGap.size * 100).toInt()}% at position ${largestGap.position}');
+    
+    // Find the closest field to this gap
+    String? closestField;
+    double minDistance = double.infinity;
+    
+    for (final fieldId in fieldsInRow) {
+      final config = _fieldConfigs[fieldId]!;
+      final fieldCenter = config.position.dx + (config.width / 2);
+      final gapCenter = largestGap.position + (largestGap.size / 2);
+      final distance = (fieldCenter - gapCenter).abs();
+      
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestField = fieldId;
+      }
+    }
+    
+    print('  Closest field to gap: $closestField (distance: ${(minDistance * 100).toInt()}%)');
+    
+    if (closestField != null) {
+      final currentWidth = _fieldConfigs[closestField]!.width;
+      final newWidth = (currentWidth + availableSpace).clamp(0.0, 1.0);
+      final snappedWidth = MagneticCardSystem.getMagneticWidth(newWidth);
+      
+      print('  Updating $closestField: ${(currentWidth * 100).toInt()}% → ${(snappedWidth * 100).toInt()}%');
+      return {closestField: snappedWidth};
     }
     
     return null;
