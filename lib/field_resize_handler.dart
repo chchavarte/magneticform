@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'form_models.dart';
 import 'field_animations.dart';
+import 'grid_utils.dart';
+import 'app_theme.dart';
 
 // Field resize handler - manages all drag-to-resize functionality
 class FieldResizeHandler {
@@ -106,21 +108,20 @@ class FieldResizeHandler {
         width: newWidth,
         position: Offset(newX, config.position.dy),
       );
-      
+
       // Check if new dimensions would cause overlap
       if (!allowOverlap) {
-        final wouldOverlap = MagneticCardSystem.wouldOverlap(
-          newConfig.position,
-          newConfig.width,
-          containerWidth,
+        final wouldOverlap = GridUtils.wouldFieldOverlap(
+          newConfig,
           fieldConfigs,
           fieldId,
+          containerWidth,
         );
-        
+
         // Only allow resize if no overlap
         if (wouldOverlap) return null;
       }
-      
+
       return newConfig;
     }
 
@@ -178,7 +179,8 @@ class FieldResizeHandler {
         candidateStartColumn,
       );
 
-      final actualWidth = candidateSpan / 6.0; // Convert span to width percentage
+      final actualWidth =
+          candidateSpan / 6.0; // Convert span to width percentage
       return (width: actualWidth, x: candidateX);
     } else if (accumulatedDrag > 0 && currentIndex > 0) {
       // Shrinking from left
@@ -203,15 +205,16 @@ class FieldResizeHandler {
     final currentConfig = fieldConfigs[fieldId];
     if (currentConfig == null) return;
 
-    print('DEBUG RESIZE END: Current config - width: ${currentConfig.width}, position: ${currentConfig.position}');
+    print(
+      'DEBUG RESIZE END: Current config - width: ${currentConfig.width}, position: ${currentConfig.position}',
+    );
 
     // Check if current position would cause overlap
-    final wouldOverlap = MagneticCardSystem.wouldOverlap(
-      currentConfig.position,
-      currentConfig.width,
-      containerWidth,
+    final wouldOverlap = GridUtils.wouldFieldOverlap(
+      currentConfig,
       fieldConfigs,
       fieldId,
+      containerWidth,
     );
 
     print('DEBUG RESIZE END: Would overlap: $wouldOverlap');
@@ -225,7 +228,9 @@ class FieldResizeHandler {
         fieldId: fieldId,
       );
 
-      print('DEBUG RESIZE END: Valid config found: ${validConfig?.width}, ${validConfig?.position}');
+      print(
+        'DEBUG RESIZE END: Valid config found: ${validConfig?.width}, ${validConfig?.position}',
+      );
 
       if (validConfig != null && validConfig != currentConfig) {
         print('DEBUG RESIZE END: Starting snap-back animation');
@@ -255,33 +260,38 @@ class FieldResizeHandler {
     required String fieldId,
   }) {
     // Only try smaller widths at the SAME position - never move the field
-    final currentIndex = MagneticCardSystem.cardWidths.indexOf(currentConfig.width);
-    
+    final currentIndex = MagneticCardSystem.cardWidths.indexOf(
+      currentConfig.width,
+    );
+
     for (int i = currentIndex - 1; i >= 0; i--) {
       final testWidth = MagneticCardSystem.cardWidths[i];
       final testConfig = currentConfig.copyWith(width: testWidth);
-      
-      final wouldOverlap = MagneticCardSystem.wouldOverlap(
-        testConfig.position,
-        testConfig.width,
-        containerWidth,
+
+      final wouldOverlap = GridUtils.wouldFieldOverlap(
+        testConfig,
         fieldConfigs,
         fieldId,
+        containerWidth,
       );
-      
+
       if (!wouldOverlap) {
-        print('DEBUG SNAP-BACK: Found valid width ${testWidth} at current position');
+        print(
+          'DEBUG SNAP-BACK: Found valid width ${testWidth} at current position',
+        );
         return testConfig;
       }
     }
-    
+
     // If no valid width found at current position, revert to original config
-    print('DEBUG SNAP-BACK: No valid width found, reverting to original config');
+    print(
+      'DEBUG SNAP-BACK: No valid width found, reverting to original config',
+    );
     final originalConfig = _originalConfigs[fieldId];
     if (originalConfig != null) {
       return originalConfig;
     }
-    
+
     // Fallback: return current config (shouldn't happen)
     return currentConfig;
   }
@@ -303,18 +313,20 @@ class FieldResizeHandler {
       top: 0,
       bottom: 0,
       child: GestureDetector(
-        onHorizontalDragStart: onResizeStart != null
-            ? (details) => onResizeStart(fieldId, direction)
-            : null,
+        onHorizontalDragStart:
+            onResizeStart != null
+                ? (details) => onResizeStart(fieldId, direction)
+                : null,
         onHorizontalDragUpdate:
             (details) => onResize(fieldId, details, direction),
-        onHorizontalDragEnd: onResizeEnd != null 
-            ? (details) => onResizeEnd(fieldId, direction)
-            : null,
+        onHorizontalDragEnd:
+            onResizeEnd != null
+                ? (details) => onResizeEnd(fieldId, direction)
+                : null,
         child: Container(
           width: 24,
           decoration: BoxDecoration(
-            color: Colors.transparent,
+            color: AppTheme.transparentColor,
             border: Border(
               left:
                   isLeft

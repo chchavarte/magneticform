@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'customizable_item_form.dart';
 import 'form_models.dart';
+import 'app_theme.dart';
 
 void main() {
   runApp(const MyApp());
@@ -13,10 +14,9 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Field Collision Test',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.withFieldExtensions(AppTheme.lightTheme),
+      darkTheme: AppTheme.withFieldExtensions(AppTheme.darkTheme),
+      themeMode: ThemeMode.system, // Automatically switch based on system preference
       home: const TestFormScreen(),
     );
   }
@@ -38,9 +38,9 @@ class TestFormScreen extends StatelessWidget {
               height: 60,
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.blue.shade100,
+                color: AppTheme.getFieldColor(context, 'field1'),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue.shade300),
+                border: Border.all(color: AppTheme.getFieldBorderColor(context, 'field1')),
               ),
               child: const Center(
                 child: Text(
@@ -59,9 +59,9 @@ class TestFormScreen extends StatelessWidget {
               height: 60,
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.green.shade100,
+                color: AppTheme.getFieldColor(context, 'field2'),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.green.shade300),
+                border: Border.all(color: AppTheme.getFieldBorderColor(context, 'field2')),
               ),
               child: const Center(
                 child: Text(
@@ -80,9 +80,9 @@ class TestFormScreen extends StatelessWidget {
               height: 60,
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.orange.shade100,
+                color: AppTheme.getFieldColor(context, 'field3'),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange.shade300),
+                border: Border.all(color: AppTheme.getFieldBorderColor(context, 'field3')),
               ),
               child: const Center(
                 child: Text(
@@ -101,9 +101,9 @@ class TestFormScreen extends StatelessWidget {
               height: 60,
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.purple.shade100,
+                color: AppTheme.getFieldColor(context, 'field4'),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.purple.shade300),
+                border: Border.all(color: AppTheme.getFieldBorderColor(context, 'field4')),
               ),
               child: const Center(
                 child: Text(
@@ -122,9 +122,9 @@ class TestFormScreen extends StatelessWidget {
               height: 60,
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.red.shade100,
+                color: AppTheme.getFieldColor(context, 'field5'),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red.shade300),
+                border: Border.all(color: AppTheme.getFieldBorderColor(context, 'field5')),
               ),
               child: const Center(
                 child: Text(
