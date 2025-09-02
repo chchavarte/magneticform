@@ -1,48 +1,5 @@
 import 'package:flutter/material.dart';
-
-// Resize direction enum
-enum ResizeDirection { left, right }
-
-// Field configuration model
-class FieldConfig {
-  final String id;
-  final double width; // 0.0 to 1.0 (percentage of parent width)
-  final Offset position;
-
-  FieldConfig({
-    required this.id,
-    this.width = 1.0,
-    this.position = Offset.zero,
-  });
-
-  FieldConfig copyWith({String? id, double? width, Offset? position}) {
-    return FieldConfig(
-      id: id ?? this.id,
-      width: width ?? this.width,
-      position: position ?? this.position,
-    );
-  }
-
-  // Helper method to check if field is visible/active
-  bool get isVisible => width > 0 && position.dx >= 0 && position.dy >= 0;
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'width': width,
-      'positionX': position.dx,
-      'positionY': position.dy,
-    };
-  }
-
-  factory FieldConfig.fromMap(Map<String, dynamic> map) {
-    return FieldConfig(
-      id: map['id'],
-      width: map['width'],
-      position: Offset(map['positionX'], map['positionY']),
-    );
-  }
-}
+import 'field_config.dart';
 
 // Magnetic card system for snapping fields
 class MagneticCardSystem {
@@ -335,23 +292,4 @@ class MagneticCardSystem {
     final gapSpacePercentage = (gapCount * fieldGap) / containerWidth;
     return (1.0 - totalOccupied - gapSpacePercentage).clamp(0.0, 1.0);
   }
-}
-
-// Field definition for the form
-class CustomFormField {
-  final String id;
-  final String label;
-  final IconData icon;
-  final Widget Function(BuildContext context, bool isCustomizationMode) builder;
-  final bool isMandatory;
-  final String? defaultValue;
-
-  const CustomFormField({
-    required this.id,
-    required this.label,
-    required this.icon,
-    required this.builder,
-    this.isMandatory = false,
-    this.defaultValue,
-  });
 }

@@ -1,25 +1,12 @@
 import 'package:flutter/material.dart';
-import 'form_models.dart';
+import 'package:field_collision_test/core/constants/animation_constants.dart';
 import 'field_animations.dart';
 import 'grid_utils.dart';
+import '../../data/models/field_config.dart';
+import '../../data/models/magnetic_card_system.dart';
 
 // Preview-on-hover system for field positioning
 class FieldPreviewSystem {
-  // Animation durations for different preview actions
-  static const Duration previewDuration = Duration(
-    milliseconds: 150,
-  ); // Fast preview
-  static const Duration commitDuration = Duration(
-    milliseconds: 300,
-  ); // Smooth commit
-  static const Duration revertDuration = Duration(
-    milliseconds: 200,
-  ); // Quick revert
-
-  // Animation curves for different actions
-  static const Curve previewCurve = Curves.easeOutQuart;
-  static const Curve commitCurve = Curves.easeOutCubic;
-  static const Curve revertCurve = Curves.easeInOut;
 
   // Calculate preview positions for a field being dragged to a target row
   static Map<String, FieldConfig> calculatePreviewPositions({
@@ -395,7 +382,7 @@ class FieldPreviewSystem {
     final columnSpan = MagneticCardSystem.getColumnsFromWidth(fieldWidth);
 
     print(
-      'DEBUG POSITION: Finding position for width $fieldWidth (${columnSpan} columns)',
+      'DEBUG POSITION: Finding position for width $fieldWidth ($columnSpan columns)',
     );
 
     // Try each possible starting column
@@ -575,8 +562,8 @@ class FieldPreviewSystem {
       toConfigs: toConfigs,
       onUpdate: onUpdate,
       onComplete: onComplete,
-      duration: previewDuration,
-      curve: previewCurve,
+      duration: AnimationConstants.previewDuration,
+      curve: AnimationConstants.previewCurve,
     );
   }
 
@@ -594,8 +581,8 @@ class FieldPreviewSystem {
       toConfigs: toConfigs,
       onUpdate: onUpdate,
       onComplete: onComplete,
-      duration: commitDuration,
-      curve: commitCurve,
+      duration: AnimationConstants.commitDuration,
+      curve: AnimationConstants.commitCurve,
     );
   }
 
@@ -613,8 +600,8 @@ class FieldPreviewSystem {
       toConfigs: toConfigs,
       onUpdate: onUpdate,
       onComplete: onComplete,
-      duration: revertDuration,
-      curve: revertCurve,
+      duration: AnimationConstants.revertDuration,
+      curve: AnimationConstants.revertCurve,
     );
   }
 

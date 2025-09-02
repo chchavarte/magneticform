@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'dart:ui' show lerpDouble;
-import 'form_models.dart';
+import 'package:field_collision_test/core/constants/animation_constants.dart';
+import '../../data/models/field_config.dart';
 
 // Reusable animation system for field resize operations
 class FieldAnimations {
-  static const Duration _defaultDuration = Duration(milliseconds: 300);
-  static const Curve _defaultCurve = Curves.easeOutCubic;
+  static const Duration _defaultDuration = AnimationConstants.defaultFieldAnimationDuration;
+  static const Curve _defaultCurve = AnimationConstants.defaultFieldAnimationCurve;
 
   // Animate field width changes (for resize snap-back and auto-resize)
   static void animateFieldResize({

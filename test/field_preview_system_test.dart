@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter/material.dart';
-import '../lib/field_preview_system.dart';
-import '../lib/form_models.dart';
+import 'package:field_collision_test/features/customizable_form/presentation/systems/field_preview_system.dart';
+import 'package:field_collision_test/features/customizable_form/data/models/field_config.dart';
 
 void main() {
   group('FieldPreviewSystem', () {

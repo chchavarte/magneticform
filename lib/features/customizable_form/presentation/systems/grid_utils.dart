@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'form_models.dart';
+import 'package:field_collision_test/core/utils/logger.dart';
+import '../../data/models/field_config.dart';
+import '../../data/models/magnetic_card_system.dart';
 
 /// Represents complete grid information for a field
 class FieldGridInfo {
@@ -218,11 +220,11 @@ class GridUtils {
     Map<String, FieldConfig> fieldConfigs,
     double containerWidth,
   ) {
-    print('\n$title');
+    Logger.grid(title);
     for (final entry in fieldConfigs.entries) {
       final config = entry.value;
       final gridInfo = getFieldGridInfo(config, containerWidth);
-      print('  ${entry.key}: $gridInfo');
+      Logger.grid('  ${entry.key}: $gridInfo');
     }
   }
 

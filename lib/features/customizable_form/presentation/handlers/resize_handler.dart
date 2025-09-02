@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'form_models.dart';
-import 'field_animations.dart';
-import 'grid_utils.dart';
-import 'app_theme.dart';
+import 'package:field_collision_test/core/constants/field_constants.dart';
+import 'package:field_collision_test/core/utils/logger.dart';
+import 'package:field_collision_test/core/utils/decoration_utils.dart';
+import '../systems/field_animations.dart';
+import '../systems/grid_utils.dart';
+import '../../data/models/field_config.dart';
+import '../../data/models/magnetic_card_system.dart';
 
 // Field resize handler - manages all drag-to-resize functionality
 class FieldResizeHandler {
-  static const double _accumulationThreshold = 0.1; // 10% of container width
+  static const double _accumulationThreshold = FieldConstants.accumulationThreshold;
 
   // Store original configs before resize starts
   static final Map<String, FieldConfig> _originalConfigs = {};
@@ -201,13 +204,11 @@ class FieldResizeHandler {
     required VoidCallback onSave,
     required TickerProvider vsync,
   }) {
-    print('DEBUG RESIZE END: Called for field $fieldId');
+    Logger.resize('Called for field $fieldId');
     final currentConfig = fieldConfigs[fieldId];
     if (currentConfig == null) return;
 
-    print(
-      'DEBUG RESIZE END: Current config - width: ${currentConfig.width}, position: ${currentConfig.position}',
-    );
+    Logger.resize('Current config - width: ${currentConfig.width}, position: ${currentConfig.position}');
 
     // Check if current position would cause overlap
     final wouldOverlap = GridUtils.wouldFieldOverlap(
@@ -217,7 +218,7 @@ class FieldResizeHandler {
       containerWidth,
     );
 
-    print('DEBUG RESIZE END: Would overlap: $wouldOverlap');
+    Logger.resize('Would overlap: $wouldOverlap');
 
     if (wouldOverlap) {
       // Find the last valid configuration
@@ -228,12 +229,10 @@ class FieldResizeHandler {
         fieldId: fieldId,
       );
 
-      print(
-        'DEBUG RESIZE END: Valid config found: ${validConfig?.width}, ${validConfig?.position}',
-      );
+      Logger.resize('Valid config found: ${validConfig?.width}, ${validConfig?.position}');
 
       if (validConfig != null && validConfig != currentConfig) {
-        print('DEBUG RESIZE END: Starting snap-back animation');
+        Logger.resize('Starting snap-back animation');
         // Animate snap-back to valid configuration
         FieldAnimations.animateFieldConfig(
           vsync: vsync,
@@ -247,7 +246,7 @@ class FieldResizeHandler {
       }
     }
 
-    print('DEBUG RESIZE END: No snap-back needed, just saving');
+    Logger.resize('No snap-back needed, just saving');
     // No snap-back needed, just save
     onSave();
   }
@@ -276,17 +275,13 @@ class FieldResizeHandler {
       );
 
       if (!wouldOverlap) {
-        print(
-          'DEBUG SNAP-BACK: Found valid width ${testWidth} at current position',
-        );
+        Logger.resize('Found valid width $testWidth at current position');
         return testConfig;
       }
     }
 
     // If no valid width found at current position, revert to original config
-    print(
-      'DEBUG SNAP-BACK: No valid width found, reverting to original config',
-    );
+    Logger.resize('No valid width found, reverting to original config');
     final originalConfig = _originalConfigs[fieldId];
     if (originalConfig != null) {
       return originalConfig;
@@ -298,6 +293,7 @@ class FieldResizeHandler {
 
   // Build resize handle widget
   static Widget buildResizeHandle({
+    required BuildContext context,
     required ResizeDirection direction,
     required String fieldId,
     required ThemeData theme,
@@ -324,32 +320,19 @@ class FieldResizeHandler {
                 ? (details) => onResizeEnd(fieldId, direction)
                 : null,
         child: Container(
-          width: 24,
-          decoration: BoxDecoration(
-            color: AppTheme.transparentColor,
-            border: Border(
-              left:
-                  isLeft
-                      ? BorderSide(color: theme.colorScheme.primary, width: 2)
-                      : BorderSide.none,
-              right:
-                  !isLeft
-                      ? BorderSide(color: theme.colorScheme.primary, width: 2)
-                      : BorderSide.none,
-            ),
+          width: FieldConstants.resizeHandleWidth,
+          decoration: DecorationUtils.createResizeHandleDecoration(
+            context,
+            isLeft,
           ),
           child: Center(
             child: Container(
               width: 12,
-              height: 40,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                border: Border.all(color: theme.colorScheme.primary),
-                borderRadius: BorderRadius.circular(4),
-              ),
+              height: FieldConstants.resizeHandleHeight,
+              decoration: DecorationUtils.createResizeHandleInnerDecoration(context),
               child: Icon(
                 Icons.drag_indicator,
-                size: 16,
+                size: FieldConstants.resizeHandleIconSize,
                 color: theme.colorScheme.primary,
               ),
             ),
