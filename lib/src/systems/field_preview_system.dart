@@ -27,13 +27,10 @@ class FieldPreviewSystem {
       currentConfigs: currentConfigs,
     );
 
-    Logger.preview(
-      'DEBUG CONDITION: Row $targetRow - Total columns: 6, Occupied columns: ${rowAnalysis.occupiedColumns}, Is full: ${rowAnalysis.isRowFull}',
-    );
+
 
     if (rowAnalysis.isRowFull) {
       // Row is completely full (total columns = occupied columns) → Push down
-      Logger.preview('DEBUG CONDITION: Row is full, using push down');
       return _calculatePushDownPreview(
         targetRow: targetRow,
         draggedFieldId: draggedFieldId,
@@ -42,7 +39,6 @@ class FieldPreviewSystem {
       );
     } else {
       // Row has available space (total columns ≠ occupied columns) → Expand/Shrink
-      Logger.preview('DEBUG CONDITION: Row has space, trying auto-resize');
       final autoResizeResult = _calculateAutoResizePreview(
         targetRow: targetRow,
         draggedFieldId: draggedFieldId,
@@ -58,9 +54,6 @@ class FieldPreviewSystem {
       }
 
       // If auto-resize fails, try direct placement
-      Logger.preview(
-        'TRYING DIRECT PLACEMENT: Field width ${(draggedField.width * 100).toInt()}%',
-      );
       final availablePosition = _findAvailablePositionInRow(
         targetRow: targetRow,
         fieldWidth: draggedField.width,
@@ -619,7 +612,7 @@ class FieldPreviewSystem {
         hasSpace: false,
         targetPosition: null,
         targetColumns: null,
-        message: 'Field not found',
+        message: '',
         isPushDown: false,
       );
     }
@@ -647,15 +640,12 @@ class FieldPreviewSystem {
         containerWidth,
       );
       final columnSpan = MagneticCardSystem.getColumnsFromWidth(optimalWidth);
-      final widthPercent = (optimalWidth * 100).toInt();
-      final action = optimalWidth > draggedField.width ? 'expand' : 'shrink';
 
       return PreviewInfo(
         hasSpace: true,
         targetPosition: availableSpace.startPosition,
         targetColumns: (start: startColumn, span: columnSpan),
-        message:
-            'Will $action to $widthPercent% width and place in columns ${startColumn + 1}-${startColumn + columnSpan}',
+        message: '',
         isPushDown: false,
       );
     }
@@ -683,8 +673,7 @@ class FieldPreviewSystem {
         hasSpace: true,
         targetPosition: directPosition,
         targetColumns: (start: startColumn, span: columnSpan),
-        message:
-            'Will place in columns ${startColumn + 1}-${startColumn + columnSpan}',
+        message: '',
         isPushDown: false,
       );
     } else {
@@ -701,7 +690,7 @@ class FieldPreviewSystem {
         hasSpace: true, // We can still place it, just need to push down
         targetPosition: pushDownPosition,
         targetColumns: (start: 0, span: columnSpan),
-        message: 'Will push other fields down to make space',
+        message: '',
         isPushDown: true,
       );
     }

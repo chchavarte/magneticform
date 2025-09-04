@@ -204,10 +204,6 @@ class MagneticFormBuilderState extends State<MagneticFormBuilder>
   // Throttling for rearrangement to prevent excessive calls
   DateTime? _lastRearrangementTime;
 
-  // Auto-resize feedback
-  String? _autoResizeMessage;
-  DateTime? _autoResizeTime;
-
   // Preview system state
   PreviewState _previewState = PreviewState.initial();
 
@@ -441,12 +437,6 @@ class MagneticFormBuilderState extends State<MagneticFormBuilder>
                 SizedBox(height: bottomPadding),
               ],
             ),
-            // Auto-resize feedback message
-            if (_autoResizeMessage != null)
-              FormUIBuilder.buildAutoResizeMessage(
-                context: context,
-                message: _autoResizeMessage!,
-              ),
           ],
         ),
       ),
@@ -618,9 +608,6 @@ class MagneticFormBuilderState extends State<MagneticFormBuilder>
         });
       },
     );
-
-    // Show preview feedback
-    _showAutoResizeMessage(previewInfo.message);
   }
 
   // Build preview target indicator
@@ -797,25 +784,6 @@ class MagneticFormBuilderState extends State<MagneticFormBuilder>
         _selectedFieldId = null;
       });
     }
-  }
-
-  void _showAutoResizeMessage(String message) {
-    setState(() {
-      _autoResizeMessage = message;
-      _autoResizeTime = DateTime.now();
-    });
-
-    // Clear the message after the configured duration
-    Future.delayed(AnimationConstants.autoResizeMessageDuration, () {
-      if (mounted &&
-          _autoResizeTime != null &&
-          DateTime.now().difference(_autoResizeTime!).inSeconds >= 3) {
-        setState(() {
-          _autoResizeMessage = null;
-          _autoResizeTime = null;
-        });
-      }
-    });
   }
 
   void _toggleAdditionalField(String fieldId) {
