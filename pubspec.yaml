@@ -1,0 +1,33 @@
+name: magnetic_form_builder
+description: A sophisticated Flutter package for building drag-and-drop forms with magnetic grid positioning, collision detection, and smooth animations.
+version: 1.0.0
+homepage: https://github.com/yourusername/magnetic_form_builder
+repository: https://github.com/yourusername/magnetic_form_builder
+issue_tracker: https://github.com/yourusername/magnetic_form_builder/issues
+documentation: https://pub.dev/documentation/magnetic_form_builder/latest/
+
+topics:
+  - flutter
+  - forms
+  - drag-and-drop
+  - ui
+  - widgets
+  - grid
+  - animation
+
+environment:
+  sdk: ^3.7.2
+  flutter: ">=3.7.2"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  # No assets needed for this package
