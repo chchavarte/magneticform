@@ -16,20 +16,11 @@ import '../theme/magnetic_theme.dart';
 
 /// A sophisticated form builder widget with magnetic grid positioning and drag-and-drop capabilities.
 ///
-/// The [MagneticFormBuilder] provides a 6-column grid system where form fields can be
-/// dragged, resized, and positioned with intelligent collision detection and auto-resize
-/// functionality. All interactions include smooth animations and haptic feedback.
+/// Creates a customizable form interface where users can drag and drop fields to create
+/// their preferred layout. The widget uses a 6-column responsive grid system with
+/// intelligent field placement, collision detection, and smooth animations.
 ///
-/// ## Features
-///
-/// - **6-Column Grid System**: Responsive grid with precise field snapping
-/// - **Drag & Drop**: Real-time preview-on-hover during drag operations
-/// - **Intelligent Placement**: Auto-resize, push-down, and collision detection
-/// - **Smooth Animations**: 150ms preview, 300ms commit, 200ms revert animations
-/// - **Theme Support**: Full customization with field-specific styling
-/// - **Data Persistence**: Automatic saving and restoring of field configurations
-///
-/// ## Example
+/// ## Quick Start
 ///
 /// ```dart
 /// MagneticFormBuilder(
@@ -37,67 +28,154 @@ import '../theme/magnetic_theme.dart';
 ///     MagneticFormField(
 ///       id: 'name',
 ///       label: 'Full Name',
+///       icon: Icons.person,
 ///       builder: (context, isCustomizationMode) => TextField(
 ///         decoration: InputDecoration(labelText: 'Full Name'),
+///         enabled: !isCustomizationMode, // Important: disable during layout editing
 ///       ),
 ///     ),
 ///   ],
 ///   defaultFieldConfigs: {
 ///     'name': FieldConfig(
 ///       id: 'name',
-///       position: Offset(0, 0), // Column 0, Row 0
-///       size: Size(6, 1),       // Full width, 1 row height
+///       position: Offset(0, 0),    // Top-left corner
+///       width: 1.0,               // Full width (100%)
 ///     ),
 ///   },
 ///   appBarTitle: 'My Custom Form',
 ///   onFormDataChanged: (data) => print('Form data: $data'),
 /// )
 /// ```
+///
+/// ## Grid System
+///
+/// - **6-Column Grid**: Fields snap to a responsive 6-column layout
+/// - **Position**: `Offset(x, y)` where x is 0.0-1.0 (left to right), y is row number * 70
+/// - **Width**: Percentage of container width (0.0 to 1.0)
+/// - **Auto-resize**: Fields automatically adjust to fit available space
+///
+/// ## Advanced Features (Automatic)
+///
+/// - ✅ Real-time preview during drag operations
+/// - ✅ Intelligent field placement with collision detection
+/// - ✅ Auto-resize to fit available space
+/// - ✅ Push up/pull down logic for optimal layouts
+/// - ✅ Smooth 60fps animations for all interactions
+/// - ✅ Form data persistence with customizable storage keys
+///
+/// ## Common Layout Patterns
+///
+/// ```dart
+/// // Side-by-side fields (50/50)
+/// 'firstName': FieldConfig(id: 'firstName', position: Offset(0, 0), width: 0.5),
+/// 'lastName': FieldConfig(id: 'lastName', position: Offset(0.5, 0), width: 0.5),
+///
+/// // Three columns (33/33/33)
+/// 'day': FieldConfig(id: 'day', position: Offset(0, 0), width: 0.33),
+/// 'month': FieldConfig(id: 'month', position: Offset(0.33, 0), width: 0.33),
+/// 'year': FieldConfig(id: 'year', position: Offset(0.66, 0), width: 0.33),
+///
+/// // Full width header + two columns
+/// 'title': FieldConfig(id: 'title', position: Offset(0, 0), width: 1.0),
+/// 'address1': FieldConfig(id: 'address1', position: Offset(0, 70), width: 0.5),
+/// 'address2': FieldConfig(id: 'address2', position: Offset(0.5, 70), width: 0.5),
+/// ```
 class MagneticFormBuilder extends StatefulWidget {
   /// List of form fields that can be placed on the magnetic grid.
   ///
   /// Each field must have a unique [MagneticFormField.id] and provide a
   /// [MagneticFormField.builder] function that creates the field widget.
-  final List<MagneticFormField> availableFields;
-
-  /// Default positions and sizes for fields on the grid.
   ///
-  /// The map keys must match the [MagneticFormField.id] values. Each
-  /// [FieldConfig] defines the initial position (column, row) and size
-  /// (width in columns, height in rows) for the corresponding field.
+  /// **Important**: In the builder function, always disable field interaction
+  /// during customization mode by checking `isCustomizationMode`.
   ///
   /// Example:
   /// ```dart
-  /// {
-  ///   'name': FieldConfig(id: 'name', position: Offset(0, 0), size: Size(6, 1)),
-  ///   'email': FieldConfig(id: 'email', position: Offset(0, 1), size: Size(3, 1)),
+  /// availableFields: [
+  ///   MagneticFormField(
+  ///     id: 'email',
+  ///     label: 'Email Address',
+  ///     icon: Icons.email,
+  ///     builder: (context, isCustomizationMode) => TextField(
+  ///       decoration: InputDecoration(labelText: 'Email'),
+  ///       enabled: !isCustomizationMode, // Disable during layout editing
+  ///       keyboardType: TextInputType.emailAddress,
+  ///     ),
+  ///   ),
+  /// ]
+  /// ```
+  final List<MagneticFormField> availableFields;
+
+  /// Initial positions and sizes for fields on the grid.
+  ///
+  /// Map keys must match [MagneticFormField.id] values. Each [FieldConfig]
+  /// defines where the field appears initially and how much space it occupies.
+  ///
+  /// ## Position System
+  /// - `position.dx`: Horizontal position (0.0 = left edge, 1.0 = right edge)
+  /// - `position.dy`: Vertical position (0 = top, increments by ~70px per row)
+  /// - `width`: Field width as percentage (0.0-1.0)
+  ///
+  /// ## Common Patterns
+  /// ```dart
+  /// defaultFieldConfigs: {
+  ///   // Full width field at top
+  ///   'name': FieldConfig(id: 'name', position: Offset(0, 0), width: 1.0),
+  ///   
+  ///   // Two half-width fields side by side
+  ///   'firstName': FieldConfig(id: 'firstName', position: Offset(0, 70), width: 0.5),
+  ///   'lastName': FieldConfig(id: 'lastName', position: Offset(0.5, 70), width: 0.5),
+  ///   
+  ///   // Three equal columns
+  ///   'day': FieldConfig(id: 'day', position: Offset(0, 140), width: 0.33),
+  ///   'month': FieldConfig(id: 'month', position: Offset(0.33, 140), width: 0.33),
+  ///   'year': FieldConfig(id: 'year', position: Offset(0.66, 140), width: 0.33),
   /// }
   /// ```
   final Map<String, FieldConfig> defaultFieldConfigs;
 
   /// Custom theme data for styling the form builder.
   ///
-  /// If not provided, uses [MagneticTheme.lightTheme] by default. For best
-  /// results, wrap your custom theme with [MagneticTheme.withFieldExtensions]
-  /// to ensure field-specific styling is properly applied.
+  /// If not provided, automatically inherits from your app's theme. For custom
+  /// themes, wrap with [MagneticTheme.withFieldExtensions] to ensure proper
+  /// field-specific styling.
   ///
-  /// Example:
+  /// ## Theme Options
   /// ```dart
+  /// // Option 1: Use built-in themes
+  /// theme: MagneticTheme.lightTheme,  // or MagneticTheme.darkTheme
+  ///
+  /// // Option 2: Custom theme
   /// theme: MagneticTheme.withFieldExtensions(
-  ///   ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal))
-  /// )
+  ///   ThemeData(
+  ///     colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
+  ///     useMaterial3: true,
+  ///   ),
+  /// ),
+  ///
+  /// // Option 3: No theme (inherits from app)
+  /// // theme: null, // Default behavior
   /// ```
   final ThemeData? theme;
 
-  /// Optional widget to display below the form grid.
+  /// Builder function for custom content below the form grid.
   ///
-  /// The builder function receives the current [BuildContext] and a map of
-  /// form data containing the current values of all fields. Useful for
-  /// displaying form summaries, submit buttons, or validation messages.
+  /// Receives the current [BuildContext] and a map of form data containing
+  /// the current values of all fields. Perfect for submit buttons, form
+  /// summaries, or validation messages.
   ///
   /// Example:
   /// ```dart
-  /// bottomWidget: (context, formData) => ElevatedButton(
+  /// formDataBuilder: (context, formData) => Column(
+  ///   children: [
+  ///     ElevatedButton(
+  ///       onPressed: () => submitForm(formData),
+  ///       child: Text('Submit Form'),
+  ///     ),
+  ///     Text('Fields filled: ${formData.length}'),
+  ///   ],
+  /// ),
+  /// ```
   ///   onPressed: () => submitForm(formData),
   ///   child: Text('Submit Form'),
   /// )

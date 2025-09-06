@@ -3,26 +3,99 @@ import 'package:flutter/material.dart';
 /// Represents a form field that can be placed on the magnetic grid.
 /// 
 /// Each [MagneticFormField] defines a reusable form component with its own
-/// unique identifier, display properties, and widget builder function.
+/// unique identifier, display properties, and widget builder function. Fields
+/// can be dragged, resized, and repositioned by users in customization mode.
 /// 
-/// ## Example
+/// ## Key Concepts
+/// 
+/// - **Unique ID**: Each field must have a unique identifier that matches
+///   the keys in [MagneticFormBuilder.defaultFieldConfigs]
+/// - **Builder Pattern**: The builder function creates the actual widget,
+///   receiving context and customization mode state
+/// - **Customization Mode**: When `isCustomizationMode` is true, fields
+///   should be disabled to prevent interaction during layout editing
+/// 
+/// ## Common Field Types
 /// 
 /// ```dart
+/// // Text Input Field
+/// MagneticFormField(
+///   id: 'name',
+///   label: 'Full Name',
+///   icon: Icons.person,
+///   builder: (context, isCustomizationMode) => TextField(
+///     decoration: InputDecoration(labelText: 'Full Name'),
+///     enabled: !isCustomizationMode,
+///   ),
+/// )
+/// 
+/// // Email Field
 /// MagneticFormField(
 ///   id: 'email',
 ///   label: 'Email Address',
 ///   icon: Icons.email,
 ///   builder: (context, isCustomizationMode) => TextField(
-///     decoration: InputDecoration(
-///       labelText: 'Email Address',
-///       border: OutlineInputBorder(),
-///     ),
-///     enabled: !isCustomizationMode, // Disable during customization
+///     decoration: InputDecoration(labelText: 'Email'),
+///     keyboardType: TextInputType.emailAddress,
+///     enabled: !isCustomizationMode,
 ///   ),
-///   isMandatory: true,
-///   defaultValue: 'user@example.com',
+/// )
+/// 
+/// // Dropdown Field
+/// MagneticFormField(
+///   id: 'country',
+///   label: 'Country',
+///   icon: Icons.public,
+///   builder: (context, isCustomizationMode) => DropdownButtonFormField<String>(
+///     decoration: InputDecoration(labelText: 'Country'),
+///     items: ['USA', 'Canada', 'UK'].map((country) => 
+///       DropdownMenuItem(value: country, child: Text(country))
+///     ).toList(),
+///     onChanged: isCustomizationMode ? null : (value) => handleChange(value),
+///   ),
+/// )
+/// 
+/// // Date Picker Field
+/// MagneticFormField(
+///   id: 'birthDate',
+///   label: 'Birth Date',
+///   icon: Icons.calendar_today,
+///   builder: (context, isCustomizationMode) => TextField(
+///     decoration: InputDecoration(
+///       labelText: 'Birth Date',
+///       suffixIcon: Icon(Icons.calendar_today),
+///     ),
+///     readOnly: true,
+///     enabled: !isCustomizationMode,
+///     onTap: isCustomizationMode ? null : () => showDatePicker(...),
+///   ),
 /// )
 /// ```
+/// 
+/// ## Best Practices
+/// 
+/// 1. **Always disable fields during customization**:
+///    ```dart
+///    enabled: !isCustomizationMode, // Essential for proper UX
+///    ```
+/// 
+/// 2. **Use descriptive IDs**:
+///    ```dart
+///    id: 'userEmail',        // ✅ Clear and descriptive
+///    id: 'field1',          // ❌ Generic and unclear
+///    ```
+/// 
+/// 3. **Choose appropriate icons**:
+///    ```dart
+///    Icons.email,           // ✅ Matches field purpose
+///    Icons.text_fields,     // ✅ Generic text input
+///    Icons.calendar_today,  // ✅ Date fields
+///    ```
+/// 
+/// 4. **Handle null callbacks in customization mode**:
+///    ```dart
+///    onChanged: isCustomizationMode ? null : (value) => handleChange(value),
+///    ```
 class MagneticFormField {
   /// Unique identifier for this field.
   /// 

@@ -13,40 +13,74 @@ enum ResizeDirection {
 
 /// Configuration data for a field's position and size on the magnetic grid.
 /// 
-/// Each [FieldConfig] represents the layout properties of a single form field,
-/// including its position on the grid and its dimensions. This data is used
-/// for rendering, collision detection, and persistence.
+/// Each [FieldConfig] defines where a form field appears on the grid and how
+/// much space it occupies. The configuration uses a normalized coordinate system
+/// where positions and sizes are expressed as percentages of the container.
 /// 
-/// ## Grid System
+/// ## Coordinate System
 /// 
-/// The magnetic form builder uses a 6-column grid system:
-/// - **Columns**: 0-5 (6 total columns)
-/// - **Rows**: 0+ (unlimited rows, auto-expanding)
-/// - **Position**: [Offset] where x = column, y = row
-/// - **Size**: [Size] where width = columns (1-6), height = rows (1+)
+/// - **Position**: `Offset(x, y)` where:
+///   - `x`: Horizontal position (0.0 = left edge, 1.0 = right edge)
+///   - `y`: Vertical position (0 = top, increments by ~70px per row)
+/// - **Width**: Percentage of container width (0.0 to 1.0)
+/// - **Grid**: 6-column responsive system with intelligent snapping
 /// 
-/// ## Example
+/// ## Common Layout Patterns
 /// 
 /// ```dart
-/// // Full width field at top
+/// // Full width field
 /// FieldConfig(
-///   id: 'title',
-///   position: Offset(0, 0), // Column 0, Row 0
-///   size: Size(6, 1),       // 6 columns wide, 1 row tall
+///   id: 'description',
+///   position: Offset(0, 0),    // Top-left corner
+///   width: 1.0,               // Full width (100%)
 /// )
 /// 
-/// // Half width fields side by side
-/// FieldConfig(
-///   id: 'first_name',
-///   position: Offset(0, 1), // Left half
-///   size: Size(3, 1),       // 3 columns wide
-/// )
-/// FieldConfig(
-///   id: 'last_name',
-///   position: Offset(3, 1), // Right half
-///   size: Size(3, 1),       // 3 columns wide
-/// )
+/// // Side-by-side fields (50/50)
+/// FieldConfig(id: 'firstName', position: Offset(0, 0), width: 0.5),
+/// FieldConfig(id: 'lastName', position: Offset(0.5, 0), width: 0.5),
+/// 
+/// // Three equal columns (33/33/33)
+/// FieldConfig(id: 'day', position: Offset(0, 70), width: 0.33),
+/// FieldConfig(id: 'month', position: Offset(0.33, 70), width: 0.33),
+/// FieldConfig(id: 'year', position: Offset(0.66, 70), width: 0.33),
+/// 
+/// // Large field + small field (75/25)
+/// FieldConfig(id: 'address', position: Offset(0, 140), width: 0.75),
+/// FieldConfig(id: 'unit', position: Offset(0.75, 140), width: 0.25),
+/// 
+/// // Stacked full-width fields
+/// FieldConfig(id: 'name', position: Offset(0, 0), width: 1.0),
+/// FieldConfig(id: 'email', position: Offset(0, 70), width: 1.0),
+/// FieldConfig(id: 'phone', position: Offset(0, 140), width: 1.0),
 /// ```
+/// 
+/// ## Position Calculation
+/// 
+/// The `y` coordinate represents the vertical position in pixels:
+/// ```dart
+/// Row 0: y = 0      // Top row
+/// Row 1: y = 70     // Second row
+/// Row 2: y = 140    // Third row
+/// Row 3: y = 210    // Fourth row
+/// // ... and so on
+/// ```
+/// 
+/// ## Width Guidelines
+/// 
+/// | Width | Percentage | Use Case |
+/// |-------|------------|----------|
+/// | 1.0   | 100%       | Full-width fields (names, descriptions) |
+/// | 0.5   | 50%        | Side-by-side pairs (first/last name) |
+/// | 0.33  | 33%        | Three-column layouts (date components) |
+/// | 0.25  | 25%        | Four-column layouts (small inputs) |
+/// | 0.75  | 75%        | Asymmetric layouts (address + unit) |
+/// 
+/// ## Advanced Features
+/// 
+/// - **Auto-resize**: Fields automatically adjust width to fit available space
+/// - **Collision Detection**: Prevents overlapping field placement
+/// - **Push-down Logic**: Fields move down when space is needed above
+/// - **Magnetic Snapping**: Fields snap to grid positions for alignment
 class FieldConfig {
   /// Unique identifier matching the corresponding [MagneticFormField.id].
   final String id;
