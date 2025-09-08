@@ -120,15 +120,14 @@ library;
 export 'src/widgets/magnetic_form_builder.dart';
 
 // Core models - MagneticFormField and FieldConfig
-export 'src/models/form_field.dart';
-export 'src/models/field_config.dart';
+export 'src/models/field_models.dart';
 
 // Theme classes for customization
 export 'src/theme/magnetic_theme.dart';
 export 'src/theme/field_theme_extension.dart';
 
 // Constants for customization
-export 'src/constants/animation_constants.dart';
+export 'src/constants/magnetic_constants.dart';
 
 // Field builders for creating test fields
 export 'src/components/field_builders.dart';

@@ -1,15 +1,11 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
-import '../constants/animation_constants.dart';
-import '../utils/logger.dart';
-import '../handlers/resize_handler.dart';
-import '../handlers/drag_handler.dart';
-import '../handlers/auto_expand_handler.dart';
-import '../systems/field_preview_system.dart';
-import '../systems/grid_utils.dart';
+
+import '../utils/magnetic_utils.dart';
+import '../handlers/interaction_handler.dart';
+import '../systems/magnetic_system.dart';
 import '../components/form_ui_builder.dart';
-import '../models/field_config.dart';
-import '../models/form_field.dart';
+import '../models/field_models.dart';
 import '../models/magnetic_card_system.dart';
 import '../storage/form_storage_repository.dart';
 import '../theme/magnetic_theme.dart';
@@ -121,11 +117,11 @@ class MagneticFormBuilder extends StatefulWidget {
   /// defaultFieldConfigs: {
   ///   // Full width field at top
   ///   'name': FieldConfig(id: 'name', position: Offset(0, 0), width: 1.0),
-  ///   
+  ///
   ///   // Two half-width fields side by side
   ///   'firstName': FieldConfig(id: 'firstName', position: Offset(0, 70), width: 0.5),
   ///   'lastName': FieldConfig(id: 'lastName', position: Offset(0.5, 70), width: 0.5),
-  ///   
+  ///
   ///   // Three equal columns
   ///   'day': FieldConfig(id: 'day', position: Offset(0, 140), width: 0.33),
   ///   'month': FieldConfig(id: 'month', position: Offset(0.33, 140), width: 0.33),
@@ -267,55 +263,66 @@ class MagneticFormBuilder extends StatefulWidget {
 
 class MagneticFormBuilderState extends State<MagneticFormBuilder>
     with TickerProviderStateMixin {
+  // Core state management - consolidated
   late Map<String, FieldConfig> _fieldConfigs;
-  bool _isLoading = true;
   late final FormStorageRepository _repository;
+  bool _isLoading = true;
+
+  // UI state management - consolidated
   bool _isCustomizationMode = false;
   String? _selectedFieldId;
-  double _accumulatedDrag = 0;
 
-  // Drag state
+  // Interaction state management - consolidated
   DragState? _dragState;
-
-  // Hover state for push down logic
-
-  // Throttling for rearrangement to prevent excessive calls
+  double _accumulatedDrag = 0;
   DateTime? _lastRearrangementTime;
 
-  // Preview system state
+  // Preview system state - consolidated
   PreviewState _previewState = PreviewState.initial();
-
-  // Magnetic timeline: Store original positions for restoration
   final Map<String, Offset> _originalPositions = {};
   final Set<String> _temporarilyMovedFields = {};
 
-  // Form data storage
+  // Form data management - consolidated
   final Map<String, TextEditingController> _controllers = {};
   final Map<String, dynamic> _formData = {};
 
-  // Helper getter for container width calculation
+  // Computed properties for better organization
   double get _containerWidth => MediaQuery.of(context).size.width - 32;
-
-  // Helper getter for theme access
   ThemeData get _theme => widget.theme ?? MagneticTheme.lightTheme;
+  double get _bottomPadding => _isCustomizationMode ? 120.0 : 90.0;
+  double get _contentHeight =>
+      _isCustomizationMode
+          ? max(MediaQuery.of(context).size.height - 200, 840)
+          : MediaQuery.of(context).size.height - 150;
 
   @override
   void initState() {
     super.initState();
+    _initializeState();
+  }
+
+  // Consolidated initialization helper
+  void _initializeState() {
     _repository = LocalFormStorageRepository();
-    _initializeControllers();
+    _initializeFormControllers();
     _loadFieldConfigurations();
   }
 
-  void _initializeControllers() {
+  // Extracted form controller initialization
+  void _initializeFormControllers() {
     for (var field in widget.availableFields) {
-      _controllers[field.id] = TextEditingController(text: field.defaultValue);
-      _controllers[field.id]?.addListener(() {
-        _formData[field.id] = _controllers[field.id]?.text;
-        // Call callback when form data changes
-        widget.onFormDataChanged?.call(Map.from(_formData));
-      });
+      final controller = TextEditingController(text: field.defaultValue);
+      controller.addListener(
+        () => _handleFormDataChange(field.id, controller.text),
+      );
+      _controllers[field.id] = controller;
     }
+  }
+
+  // Extracted form data change handler
+  void _handleFormDataChange(String fieldId, String? value) {
+    _formData[fieldId] = value;
+    widget.onFormDataChanged?.call(Map.from(_formData));
   }
 
   @override
@@ -326,110 +333,104 @@ class MagneticFormBuilderState extends State<MagneticFormBuilder>
     super.dispose();
   }
 
+  // Consolidated configuration management
   Future<void> _loadFieldConfigurations() async {
     try {
       final savedConfigs = await _repository.loadConfigurations(
         widget.storageKey,
       );
-      setState(() {
-        if (savedConfigs.isNotEmpty) {
-          _fieldConfigs = savedConfigs;
-        } else {
-          _fieldConfigs = Map.from(widget.defaultFieldConfigs);
-        }
-        _isLoading = false;
-      });
-      // Call callback when field configs are loaded
-      widget.onFieldConfigChanged?.call(Map.from(_fieldConfigs));
+      _updateFieldConfigs(
+        savedConfigs.isNotEmpty ? savedConfigs : widget.defaultFieldConfigs,
+      );
     } catch (e) {
-      // If loading fails, use default configurations
-      setState(() {
-        _fieldConfigs = Map.from(widget.defaultFieldConfigs);
-        _isLoading = false;
-      });
-      widget.onFieldConfigChanged?.call(Map.from(_fieldConfigs));
+      _updateFieldConfigs(widget.defaultFieldConfigs);
     }
   }
 
   Future<void> _saveFieldConfigurations() async {
     try {
       await _repository.saveConfigurations(widget.storageKey, _fieldConfigs);
-      // Call callback when field configs are saved
-      widget.onFieldConfigChanged?.call(Map.from(_fieldConfigs));
+      _notifyFieldConfigChange();
     } catch (e) {
-      // Handle save error if needed
-      Logger.error('Error saving field configurations: $e');
+      MagneticUtils.error('Error saving field configurations: $e');
     }
+  }
+
+  // Helper for updating field configs with state management
+  void _updateFieldConfigs(Map<String, FieldConfig> configs) {
+    setState(() {
+      _fieldConfigs = Map.from(configs);
+      _isLoading = false;
+    });
+    _notifyFieldConfigChange();
+  }
+
+  // Helper for notifying field config changes
+  void _notifyFieldConfigChange() {
+    widget.onFieldConfigChanged?.call(Map.from(_fieldConfigs));
+  }
+
+  // Consolidated field layout optimization
+  void _optimizeFieldLayout() {
+    _pullUpFieldsToFillGaps();
+    _autoExpandToFillGaps();
   }
 
   // Pull up fields to fill gaps after drag operations
   void _pullUpFieldsToFillGaps() {
-    // Find all rows that have fields using utility method
-    final fieldsByRow = GridUtils.groupFieldsByRow(_fieldConfigs);
+    final fieldsByRow = MagneticSystem.groupFieldsByRow(_fieldConfigs);
+    final occupiedRows = fieldsByRow.keys.toList()..sort();
 
-    // Get all rows with fields, sorted
-    List<int> occupiedRows = fieldsByRow.keys.toList()..sort();
-
-    // Calculate all position changes in one pass (no setState yet)
-    Map<String, FieldConfig> updatedConfigs = {};
-    bool hasChanges = false;
-
-    // Simple single-pass algorithm: assign consecutive row numbers
+    final updatedConfigs = <String, FieldConfig>{};
     int targetRow = 0;
+
     for (int sourceRow in occupiedRows) {
       if (sourceRow != targetRow) {
-        // This row needs to be moved up
-        List<String> fieldsInRow = fieldsByRow[sourceRow]!;
-
-        for (String fieldId in fieldsInRow) {
+        for (String fieldId in fieldsByRow[sourceRow]!) {
           final currentConfig = _fieldConfigs[fieldId]!;
           final newY = targetRow * MagneticCardSystem.cardHeight;
-          final newPosition = Offset(currentConfig.position.dx, newY);
-
           updatedConfigs[fieldId] = currentConfig.copyWith(
-            position: newPosition,
+            position: Offset(currentConfig.position.dx, newY),
           );
-          hasChanges = true;
         }
       }
       targetRow++;
     }
 
-    // Apply all changes in a single setState
-    if (hasChanges) {
+    if (updatedConfigs.isNotEmpty) {
       setState(() {
-        for (final entry in updatedConfigs.entries) {
-          _fieldConfigs[entry.key] = entry.value;
-        }
+        _fieldConfigs.addAll(updatedConfigs);
       });
     }
   }
 
   // Auto-expand fields to fill remaining gaps after drag operations
   void _autoExpandToFillGaps() {
-    AutoExpandHandler.autoExpandToFillGaps(
+    InteractionHandler.autoExpandToFillGaps(
       fieldConfigs: _fieldConfigs,
       vsync: this,
-      onUpdate: (configs) {
-        setState(() {
-          _fieldConfigs = configs;
-        });
-      },
-      onComplete: () {
-        // Auto-expansion complete
-      },
+      onUpdate: (configs) => setState(() => _fieldConfigs = configs),
+      onComplete: () {}, // Auto-expansion complete
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Theme(
-        data: _theme,
-        child: const Scaffold(body: Center(child: CircularProgressIndicator())),
-      );
-    }
+    if (_isLoading) return _buildLoadingState();
 
+    return _buildMainWidget();
+  }
+
+  // Extracted loading state builder
+  Widget _buildLoadingState() {
+    return Theme(
+      data: _theme,
+      child: const Scaffold(body: Center(child: CircularProgressIndicator())),
+    );
+  }
+
+  // Consolidated main widget builder
+  Widget _buildMainWidget() {
     return Theme(
       data: _theme,
       child: GestureDetector(
@@ -439,13 +440,17 @@ class MagneticFormBuilderState extends State<MagneticFormBuilder>
           backgroundColor: _theme.scaffoldBackgroundColor,
           appBar: widget.showAppBar ? _buildAppBar() : null,
           body: Stack(children: [_buildMainContent()]),
-          bottomSheet:
-              _isCustomizationMode
-                  ? _buildAdditionalFieldsContainer()
-                  : widget.bottomWidget?.call(context, _formData),
+          bottomSheet: _buildBottomContent(),
         ),
       ),
     );
+  }
+
+  // Consolidated bottom content builder
+  Widget? _buildBottomContent() {
+    return _isCustomizationMode
+        ? _buildAdditionalFieldsContainer()
+        : widget.bottomWidget?.call(context, _formData);
   }
 
   PreferredSizeWidget _buildAppBar() {
@@ -453,22 +458,12 @@ class MagneticFormBuilderState extends State<MagneticFormBuilder>
       context: context,
       title: widget.appBarTitle,
       isCustomizationMode: _isCustomizationMode,
-      onToggleMode: () {
-        setState(() {
-          _isCustomizationMode = !_isCustomizationMode;
-          if (!_isCustomizationMode) {
-            _saveFieldConfigurations();
-          }
-        });
-      },
+      onToggleMode: _toggleCustomizationMode,
     );
   }
 
+  // Streamlined main content builder
   Widget _buildMainContent() {
-    final screenHeight = MediaQuery.of(context).size.height;
-    final screenWidth = MediaQuery.of(context).size.width;
-    final bottomPadding = _isCustomizationMode ? 120.0 : 90.0;
-
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       child: Container(
@@ -479,45 +474,52 @@ class MagneticFormBuilderState extends State<MagneticFormBuilder>
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(
-                  width: screenWidth - 32,
-                  height:
-                      _isCustomizationMode
-                          ? max(screenHeight - 200, 840)
-                          : screenHeight - 150,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      if (_isCustomizationMode) _buildSnapGuides(),
-
-                      // Preview target indicator
-                      if (_isCustomizationMode) _buildPreviewIndicator(),
-
-                      ..._fieldConfigs.keys.map((fieldId) {
-                        final matchingField = widget.availableFields.where(
-                          (f) => f.id == fieldId,
-                        );
-                        if (matchingField.isEmpty) {
-                          return const SizedBox.shrink();
-                        }
-
-                        return _buildMagneticField(
-                          fieldId,
-                          matchingField.first.builder(
-                            context,
-                            _isCustomizationMode,
-                          ),
-                        );
-                      }),
-                    ],
-                  ),
-                ),
-                SizedBox(height: bottomPadding),
+                _buildFieldContainer(),
+                SizedBox(height: _bottomPadding),
               ],
             ),
           ],
         ),
       ),
+    );
+  }
+
+  // Extracted field container builder
+  Widget _buildFieldContainer() {
+    return SizedBox(
+      width: _containerWidth,
+      height: _contentHeight,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [..._buildCustomizationOverlays(), ..._buildFieldWidgets()],
+      ),
+    );
+  }
+
+  // Helper for customization overlays
+  List<Widget> _buildCustomizationOverlays() {
+    if (!_isCustomizationMode) return [];
+
+    return [_buildSnapGuides(), _buildPreviewIndicator()];
+  }
+
+  // Helper for field widgets
+  List<Widget> _buildFieldWidgets() {
+    return _fieldConfigs.keys
+        .map(_buildFieldWidget)
+        .where((widget) => widget != null)
+        .cast<Widget>()
+        .toList();
+  }
+
+  // Helper for individual field widget
+  Widget? _buildFieldWidget(String fieldId) {
+    final matchingField = widget.availableFields.where((f) => f.id == fieldId);
+    if (matchingField.isEmpty) return null;
+
+    return _buildMagneticField(
+      fieldId,
+      matchingField.first.builder(context, _isCustomizationMode),
     );
   }
 
@@ -528,14 +530,10 @@ class MagneticFormBuilderState extends State<MagneticFormBuilder>
     );
   }
 
+  // Streamlined magnetic field builder
   Widget _buildMagneticField(String fieldId, Widget field) {
     final config = _fieldConfigs[fieldId];
     if (config == null) return const SizedBox.shrink();
-
-    final isSelected = _selectedFieldId == fieldId;
-    final isDragged = _dragState?.draggedFieldId == fieldId;
-    final isInPreview =
-        _previewState.isActive && fieldId != _previewState.draggedFieldId;
 
     return FormUIBuilder.buildMagneticField(
       context: context,
@@ -543,9 +541,10 @@ class MagneticFormBuilderState extends State<MagneticFormBuilder>
       field: field,
       config: config,
       isCustomizationMode: _isCustomizationMode,
-      isSelected: isSelected,
-      isDragged: isDragged,
-      isInPreview: isInPreview,
+      isSelected: _selectedFieldId == fieldId,
+      isDragged: _dragState?.draggedFieldId == fieldId,
+      isInPreview:
+          _previewState.isActive && fieldId != _previewState.draggedFieldId,
       containerWidth: _containerWidth,
       onTap: _selectField,
       onLongPressStart: _startFieldDrag,
@@ -557,30 +556,21 @@ class MagneticFormBuilderState extends State<MagneticFormBuilder>
     );
   }
 
+  // Unified drag interaction handling
   void _startFieldDrag(String fieldId, LongPressStartDetails details) {
-    _dragState = DragHandler.startFieldDrag(
+    _dragState = InteractionHandler.startFieldDrag(
       fieldId: fieldId,
       details: details,
       fieldConfigs: _fieldConfigs,
     );
 
-    setState(() {
-      _selectedFieldId = fieldId; // Also select the field
-      _previewState = PreviewState.initial();
-
-      // Store original positions for restoration
-      _originalPositions.clear();
-      _temporarilyMovedFields.clear();
-      for (final entry in _fieldConfigs.entries) {
-        _originalPositions[entry.key] = entry.value.position;
-      }
-    });
+    _initializeDragState(fieldId);
   }
 
   void _onFieldDrag(String fieldId, LongPressMoveUpdateDetails details) {
     if (_dragState == null) return;
 
-    final result = DragHandler.handleFieldDrag(
+    final result = InteractionHandler.handleFieldDrag(
       fieldId: fieldId,
       details: details,
       dragState: _dragState!,
@@ -588,81 +578,99 @@ class MagneticFormBuilderState extends State<MagneticFormBuilder>
       containerWidth: _containerWidth,
     );
 
-    // Update drag state
-    _dragState = _dragState!.copyWith(
-      hasMovedBeyondThreshold: result.hasMovedBeyondThreshold,
-    );
+    _updateDragState(fieldId, result);
 
-    // Update field position for visual feedback
-    setState(() {
-      final currentWidth = _fieldConfigs[fieldId]!.width;
-      _fieldConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
-        position: result.newPosition,
-        width: currentWidth,
-      );
-    });
-
-    // Handle preview logic if we've moved beyond threshold
     if (result.shouldShowPreview) {
       _handlePreviewLogic(fieldId, result.hoveredRow);
     }
   }
 
-  // Handle preview logic for hover effects
-  void _handlePreviewLogic(String fieldId, int hoveredRow) {
-    // Throttle preview updates to prevent excessive calls
-    final now = DateTime.now();
-    if (_lastRearrangementTime != null &&
-        now.difference(_lastRearrangementTime!).inMilliseconds < 100) {
-      return;
-    }
-    _lastRearrangementTime = now;
+  // Helper for drag state initialization
+  void _initializeDragState(String fieldId) {
+    setState(() {
+      _selectedFieldId = fieldId;
+      _previewState = PreviewState.initial();
+    });
 
-    // Check if we're hovering over a new row
+    _originalPositions.clear();
+    _temporarilyMovedFields.clear();
+    for (final entry in _fieldConfigs.entries) {
+      _originalPositions[entry.key] = entry.value.position;
+    }
+  }
+
+  // Helper for drag state updates
+  void _updateDragState(String fieldId, dynamic result) {
+    _dragState = _dragState!.copyWith(
+      hasMovedBeyondThreshold: result.hasMovedBeyondThreshold,
+    );
+
+    setState(() {
+      _fieldConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
+        position: result.newPosition,
+        width: _fieldConfigs[fieldId]!.width,
+      );
+    });
+  }
+
+  // Unified preview logic handling
+  void _handlePreviewLogic(String fieldId, int hoveredRow) {
+    if (!_shouldUpdatePreview(hoveredRow)) return;
+
+    _lastRearrangementTime = DateTime.now();
     if (_previewState.targetRow != hoveredRow) {
-      // Always show preview - either direct placement or push down
       _showPreview(fieldId, hoveredRow);
     }
   }
 
-  // Show preview positions
+  // Helper for preview throttling
+  bool _shouldUpdatePreview(int hoveredRow) {
+    final now = DateTime.now();
+    return _lastRearrangementTime == null ||
+        now.difference(_lastRearrangementTime!).inMilliseconds >= 100;
+  }
+
+  // Consolidated preview display logic
   void _showPreview(String fieldId, int targetRow) {
-    Logger.preview('Field $fieldId targeting row $targetRow');
-    GridUtils.printFieldConfigs(
-      'Current field configs before preview:',
-      _fieldConfigs,
-      _containerWidth,
-    );
+    MagneticUtils.preview('Field $fieldId targeting row $targetRow');
 
     final originalConfigs =
         _previewState.originalConfigs.isNotEmpty
             ? _previewState.originalConfigs
             : Map<String, FieldConfig>.from(_fieldConfigs);
 
-    Logger.debug('Calling FieldPreviewSystem.calculatePreviewPositions...');
-    final previewConfigs = FieldPreviewSystem.calculatePreviewPositions(
+    final previewConfigs = MagneticSystem.calculatePreviewPositions(
       targetRow: targetRow,
       draggedFieldId: fieldId,
       currentConfigs: originalConfigs,
       containerWidth: _containerWidth,
     );
 
-    Logger.debug('Calling FieldPreviewSystem.getPreviewInfo...');
-    final previewInfo = FieldPreviewSystem.getPreviewInfo(
+    final previewInfo = MagneticSystem.getPreviewInfo(
       targetRow: targetRow,
       draggedFieldId: fieldId,
       currentConfigs: originalConfigs,
       containerWidth: _containerWidth,
     );
 
-    Logger.preview('Preview result: ${previewInfo.message}');
-    GridUtils.printFieldConfigs(
-      'Preview configs returned:',
+    _updatePreviewState(
+      fieldId,
+      targetRow,
       previewConfigs,
-      _containerWidth,
+      originalConfigs,
+      previewInfo,
     );
+    _animateToPreview(fieldId, previewConfigs);
+  }
 
-    // Update preview state
+  // Helper for updating preview state
+  void _updatePreviewState(
+    String fieldId,
+    int targetRow,
+    Map<String, FieldConfig> previewConfigs,
+    Map<String, FieldConfig> originalConfigs,
+    dynamic previewInfo,
+  ) {
     _previewState = PreviewState.active(
       draggedFieldId: fieldId,
       targetRow: targetRow,
@@ -670,21 +678,22 @@ class MagneticFormBuilderState extends State<MagneticFormBuilder>
       originalConfigs: originalConfigs,
       previewInfo: previewInfo,
     );
+  }
 
-    // Animate to preview positions (excluding the dragged field which follows cursor)
+  // Helper for preview animation
+  void _animateToPreview(
+    String fieldId,
+    Map<String, FieldConfig> previewConfigs,
+  ) {
     final animationConfigs = Map<String, FieldConfig>.from(previewConfigs);
     animationConfigs[fieldId] =
         _fieldConfigs[fieldId]!; // Keep dragged field at cursor position
 
-    FieldPreviewSystem.animateToPreview(
+    MagneticSystem.animateToPreview(
       vsync: this,
       fromConfigs: _fieldConfigs,
       toConfigs: animationConfigs,
-      onUpdate: (configs) {
-        setState(() {
-          _fieldConfigs = configs;
-        });
-      },
+      onUpdate: (configs) => setState(() => _fieldConfigs = configs),
     );
   }
 
@@ -701,82 +710,80 @@ class MagneticFormBuilderState extends State<MagneticFormBuilder>
   void _onFieldDragEnd(String fieldId, LongPressEndDetails details) {
     if (_dragState == null) return;
 
-    final result = DragHandler.handleFieldDragEnd(
+    final result = InteractionHandler.handleFieldDragEnd(
       fieldId: fieldId,
       fieldConfigs: _fieldConfigs,
       containerWidth: _containerWidth,
       previewState: _previewState,
     );
 
+    _finalizeDragOperation(fieldId, result);
+    _cleanupDragState();
+  }
+
+  // Helper for finalizing drag operations
+  void _finalizeDragOperation(String fieldId, dynamic result) {
     if (result.shouldCommitPreview) {
       _commitPreview(fieldId);
     } else {
       _handleStandardDragEnd(fieldId, result.finalPosition);
     }
+  }
 
-    // Clean up drag state
-    setState(() {
-      _dragState = null;
-
-      _originalPositions.clear();
-      _temporarilyMovedFields.clear();
-    });
-
+  // Helper for cleaning up drag state
+  void _cleanupDragState() {
+    setState(() => _dragState = null);
+    _originalPositions.clear();
+    _temporarilyMovedFields.clear();
     _previewState = PreviewState.initial();
   }
 
-  // Commit preview positions with animation
+  // Unified preview commit handling
   void _commitPreview(String fieldId) {
-    Logger.success('COMMIT PREVIEW: Field $fieldId');
-    if (!_previewState.isActive ||
-        _previewState.previewInfo?.targetPosition == null) {
-      Logger.info('No active preview, using standard drag end');
+    MagneticUtils.success('COMMIT PREVIEW: Field $fieldId');
+
+    if (!_canCommitPreview()) {
       _handleStandardDragEnd(fieldId, _fieldConfigs[fieldId]!.position);
       return;
     }
 
-    Logger.info('Committing preview positions...');
-    Logger.info('Preview info: ${_previewState.previewInfo!.message}');
+    final finalConfigs = _buildFinalConfigs(fieldId);
+    _animateToFinalPosition(finalConfigs);
+  }
 
-    // Create final configs with the dragged field at the preview position
+  // Helper for preview commit validation
+  bool _canCommitPreview() {
+    return _previewState.isActive &&
+        _previewState.previewInfo?.targetPosition != null;
+  }
+
+  // Helper for building final configurations
+  Map<String, FieldConfig> _buildFinalConfigs(String fieldId) {
     final finalConfigs = Map<String, FieldConfig>.from(
       _previewState.previewConfigs,
     );
 
-    // Check if the preview included a width change for the dragged field
     final previewDraggedField = _previewState.previewConfigs[fieldId];
     if (previewDraggedField != null) {
-      Logger.info(
-        'Using preview config for $fieldId: width ${(previewDraggedField.width * 100).toInt()}%, position ${previewDraggedField.position}',
-      );
       finalConfigs[fieldId] = previewDraggedField;
     } else {
-      Logger.info('No preview config found, using target position only');
       finalConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
         position: _previewState.previewInfo!.targetPosition!,
       );
     }
 
-    GridUtils.printFieldConfigs(
-      'Final configs to commit:',
-      finalConfigs,
-      _containerWidth,
-    );
+    return finalConfigs;
+  }
 
-    // Animate to final positions
-    FieldPreviewSystem.animateToCommit(
+  // Helper for final position animation
+  void _animateToFinalPosition(Map<String, FieldConfig> finalConfigs) {
+    MagneticSystem.animateToCommit(
       vsync: this,
       fromConfigs: _fieldConfigs,
       toConfigs: finalConfigs,
-      onUpdate: (configs) {
-        setState(() {
-          _fieldConfigs = configs;
-        });
-      },
+      onUpdate: (configs) => setState(() => _fieldConfigs = configs),
       onComplete: () {
-        _pullUpFieldsToFillGaps();
-        // Auto-expand fields to fill remaining gaps
-        _autoExpandToFillGaps();
+        _optimizeFieldLayout();
         _saveFieldConfigurations();
       },
     );
@@ -789,17 +796,17 @@ class MagneticFormBuilderState extends State<MagneticFormBuilder>
         position: finalPosition,
       );
     });
-
-    _pullUpFieldsToFillGaps();
+    _optimizeFieldLayout();
     _saveFieldConfigurations();
   }
 
+  // Unified resize interaction handling
   void _onResizeField(
     String fieldId,
     DragUpdateDetails details,
     ResizeDirection direction,
   ) {
-    FieldResizeHandler.handleResize(
+    InteractionHandler.handleResize(
       fieldId: fieldId,
       details: details,
       direction: direction,
@@ -807,38 +814,33 @@ class MagneticFormBuilderState extends State<MagneticFormBuilder>
       containerWidth: _containerWidth,
       accumulatedDrag: _accumulatedDrag,
       vsync: this,
-      onFieldUpdate: (id, config) {
-        setState(() {
-          _fieldConfigs[id] = config;
-        });
-      },
-      onAccumulatedDragUpdate: (value) {
-        _accumulatedDrag = value;
-      },
+      onFieldUpdate: _updateFieldConfig,
+      onAccumulatedDragUpdate: (value) => _accumulatedDrag = value,
       onSave: _saveFieldConfigurations,
     );
   }
 
   void _onResizeFieldStart(String fieldId, ResizeDirection direction) {
-    FieldResizeHandler.handleResizeStart(
+    InteractionHandler.handleResizeStart(
       fieldId: fieldId,
       fieldConfigs: _fieldConfigs,
     );
   }
 
   void _onResizeFieldEnd(String fieldId, ResizeDirection direction) {
-    FieldResizeHandler.handleResizeEnd(
+    InteractionHandler.handleResizeEnd(
       fieldId: fieldId,
       fieldConfigs: _fieldConfigs,
       containerWidth: _containerWidth,
       vsync: this,
-      onFieldUpdate: (id, config) {
-        setState(() {
-          _fieldConfigs[id] = config;
-        });
-      },
+      onFieldUpdate: _updateFieldConfig,
       onSave: _saveFieldConfigurations,
     );
+  }
+
+  // Unified field config update helper
+  void _updateFieldConfig(String fieldId, FieldConfig config) {
+    setState(() => _fieldConfigs[fieldId] = config);
   }
 
   Widget _buildAdditionalFieldsContainer() {
@@ -850,62 +852,81 @@ class MagneticFormBuilderState extends State<MagneticFormBuilder>
     );
   }
 
+  // Consolidated field selection management
   void _selectField(String fieldId) {
-    setState(() {
-      _selectedFieldId = fieldId;
-    });
+    if (_selectedFieldId != fieldId) {
+      setState(() => _selectedFieldId = fieldId);
+    }
   }
 
   void _deselectField() {
     if (_selectedFieldId != null) {
-      setState(() {
-        _selectedFieldId = null;
-      });
+      setState(() => _selectedFieldId = null);
     }
   }
 
-  void _toggleAdditionalField(String fieldId) {
+  // Consolidated mode management
+  void _toggleCustomizationMode() {
     setState(() {
-      final config = _fieldConfigs[fieldId];
-      final isCurrentlyVisible = config != null && config.isVisible;
-
-      if (isCurrentlyVisible) {
-        // Hide the field by setting width to 0 and moving to negative position
-        _fieldConfigs[fieldId] = FieldConfig(
-          id: fieldId,
-          width: 0,
-          position: const Offset(-100, -100),
-        );
-        if (_selectedFieldId == fieldId) {
-          _selectedFieldId = null;
-        }
-
-        _pullUpFieldsToFillGaps();
-      } else {
-        // Show the field by adding it to the form
-        _addFieldToSingleColumn(fieldId);
+      _isCustomizationMode = !_isCustomizationMode;
+      if (!_isCustomizationMode) {
+        _saveFieldConfigurations();
       }
     });
+  }
+
+  // Consolidated field toggle handling
+  void _toggleAdditionalField(String fieldId) {
+    final config = _fieldConfigs[fieldId];
+    final isCurrentlyVisible = config != null && config.isVisible;
+
+    setState(() {
+      if (isCurrentlyVisible) {
+        _hideField(fieldId);
+      } else {
+        _showField(fieldId);
+      }
+    });
+
     _saveFieldConfigurations();
   }
 
-  void _addFieldToSingleColumn(String fieldId) {
-    int nextRow = 0;
-    for (var config in _fieldConfigs.values) {
-      if (config.position.dx == 0) {
-        int currentRow = MagneticCardSystem.getRowFromPosition(
-          config.position.dy,
-        );
-        if (currentRow >= nextRow) {
-          nextRow = currentRow + 1;
-        }
-      }
+  // Helper for hiding fields
+  void _hideField(String fieldId) {
+    _fieldConfigs[fieldId] = FieldConfig(
+      id: fieldId,
+      width: 0,
+      position: const Offset(-100, -100),
+    );
+
+    if (_selectedFieldId == fieldId) {
+      _selectedFieldId = null;
     }
 
+    _optimizeFieldLayout();
+  }
+
+  // Helper for showing fields
+  void _showField(String fieldId) {
+    final nextRow = _findNextAvailableRow();
     _fieldConfigs[fieldId] = FieldConfig(
       id: fieldId,
       position: Offset(0, nextRow * MagneticCardSystem.cardHeight),
       width: 1.0,
     );
+  }
+
+  // Helper for finding next available row
+  int _findNextAvailableRow() {
+    int nextRow = 0;
+    for (var config in _fieldConfigs.values) {
+      if (config.position.dx == 0) {
+        final currentRow = FieldConfig.getRowFromPosition(config.position.dy);
+        if (currentRow >= nextRow) {
+          nextRow = currentRow + 1;
+        }
+      }
+    }
+    return nextRow;
   }
 }

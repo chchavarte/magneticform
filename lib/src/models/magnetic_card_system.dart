@@ -1,21 +1,15 @@
 import 'package:flutter/material.dart';
-import 'field_config.dart';
-import '../utils/logger.dart';
+import 'field_models.dart';
+import '../constants/magnetic_constants.dart';
 
 // Magnetic card system for snapping fields
 class MagneticCardSystem {
-  static const double cardHeight = 70.0;
-  static const int maxRows = 12;
-  static const double snapThreshold = 30.0;
-  static const double fieldGap = 4.0;
-
-  // Base widths for 6-column grid (2, 3, 4, 6 columns)
-  static const List<double> cardWidths = [
-    2 / 6, // 2 columns (1/3 width)
-    3 / 6, // 3 columns (1/2 width)
-    4 / 6, // 4 columns (2/3 width)
-    6 / 6, // 6 columns (full width)
-  ];
+  // Use constants from MagneticConstants to avoid duplication
+  static const double cardHeight = MagneticConstants.cardHeight;
+  static const int maxRows = MagneticConstants.maxRows;
+  static const double snapThreshold = MagneticConstants.snapThreshold;
+  static const double fieldGap = MagneticConstants.fieldGap;
+  static const List<double> cardWidths = MagneticConstants.cardWidths;
 
   static Offset getMagneticSnapPosition(
     Offset currentPos,
@@ -54,48 +48,14 @@ class MagneticCardSystem {
     return (current - target).distance <= snapThreshold;
   }
 
-  // Column-aware overlap detection
-  static int getColumnFromPosition(double xPosition, double containerWidth) {
-    // 6-column grid: proper boundary detection
-    // Column boundaries: 0-0.167, 0.167-0.333, 0.333-0.5, 0.5-0.667, 0.667-0.833, 0.833-1.0
-    final column = (xPosition * 6).floor().clamp(0, 5);
-    return column;
-  }
-
-  static int getColumnsFromWidth(double width) {
-    // Width to column span mapping for 6-column grid
-    // Use precise fractions to avoid rounding issues
-    if (width <= 2 / 6 + 0.001) return 2; // 2/6 width = 2 columns
-    if (width <= 3 / 6 + 0.001) return 3; // 3/6 width = 3 columns
-    if (width <= 4 / 6 + 0.001) return 4; // 4/6 width = 4 columns
-    return 6; // 6/6 width = 6 columns (full row)
-  }
-
   // Get the actual column span based on width and starting position
   static int getActualColumnSpan(double width, int startColumn) {
-    final baseSpan = getColumnsFromWidth(width);
+    final baseSpan = FieldConfig.getColumnsFromWidth(width);
     // Ensure we don't exceed the grid (6 columns max)
     return (startColumn + baseSpan <= 6) ? baseSpan : (6 - startColumn);
   }
 
-  static int getRowFromPosition(double yPosition) {
-    return (yPosition / cardHeight).round();
-  }
 
-  // Helper method for normalized column position calculation
-  static double getColumnPositionNormalized(int column) {
-    return column / 6.0; // Convert column index to normalized position (0-1)
-  }
-
-  // Helper method for column width calculation
-  static double getColumnWidth(double containerWidth) {
-    return containerWidth / 6; // 6-column grid
-  }
-
-  // Helper method for position from column index
-  static double getPositionFromColumn(int column, double containerWidth) {
-    return (column * containerWidth / 6) / containerWidth; // Normalize to 0-1
-  }
 
   // Helper method to get both column and row from position
   static ({int column, int row}) getGridPosition(
@@ -103,8 +63,8 @@ class MagneticCardSystem {
     double containerWidth,
   ) {
     return (
-      column: getColumnFromPosition(position.dx, containerWidth),
-      row: getRowFromPosition(position.dy),
+      column: FieldConfig.getColumnFromPosition(position.dx, containerWidth),
+      row: FieldConfig.getRowFromPosition(position.dy),
     );
   }
 
@@ -114,7 +74,7 @@ class MagneticCardSystem {
     double width,
     double containerWidth,
   ) {
-    final startColumn = getColumnFromPosition(position.dx, containerWidth);
+    final startColumn = FieldConfig.getColumnFromPosition(position.dx, containerWidth);
     final columnSpan = getActualColumnSpan(width, startColumn);
     final actualWidth = columnSpan / 6.0; // Convert span to width percentage
     return (
@@ -132,17 +92,21 @@ class MagneticCardSystem {
     Map<String, FieldConfig> existingFields,
     String excludeFieldId,
   ) {
-    final newRow = getRowFromPosition(newPosition.dy);
-    final newStartColumn = getColumnFromPosition(
+    print('🔍 DEBUG OVERLAP CHECK:');
+    print('  Testing field: $excludeFieldId');
+    print('  New position: ${newPosition.dx}, width: $newWidth');
+    print('  Container width: $containerWidth');
+    
+    final newRow = FieldConfig.getRowFromPosition(newPosition.dy);
+    final newStartColumn = FieldConfig.getColumnFromPosition(
       newPosition.dx,
       containerWidth,
     );
     final newColumnSpan = getActualColumnSpan(newWidth, newStartColumn);
     final newEndColumn = newStartColumn + newColumnSpan - 1;
 
-    Logger.overlap(
-      'Testing position ${newPosition.dx} -> columns $newStartColumn-$newEndColumn (span: $newColumnSpan)',
-    );
+    print('  New field: row=$newRow, columns $newStartColumn-$newEndColumn (span: $newColumnSpan)');
+    print('  New field actual positions: ${newPosition.dx} to ${newPosition.dx + newWidth}');
 
     // Check against all existing fields in the same row
     for (final entry in existingFields.entries) {
@@ -152,10 +116,10 @@ class MagneticCardSystem {
       // Skip hidden fields
       if (!config.isVisible) continue;
 
-      final existingRow = getRowFromPosition(config.position.dy);
+      final existingRow = FieldConfig.getRowFromPosition(config.position.dy);
       if (existingRow != newRow) continue; // Different row, no conflict
 
-      final existingStartColumn = getColumnFromPosition(
+      final existingStartColumn = FieldConfig.getColumnFromPosition(
         config.position.dx,
         containerWidth,
       );
@@ -165,26 +129,24 @@ class MagneticCardSystem {
       );
       final existingEndColumn = existingStartColumn + existingColumnSpan - 1;
 
-      Logger.overlap(
-        'Existing field ${entry.key} at position ${config.position.dx} -> columns $existingStartColumn-$existingEndColumn',
-      );
+      print('  Existing field ${entry.key}: row=$existingRow, columns $existingStartColumn-$existingEndColumn');
+      print('  Existing field actual positions: ${config.position.dx} to ${config.position.dx + config.width}');
 
-      // Check for column overlap
-      final wouldOverlapResult =
-          !(newEndColumn < existingStartColumn ||
-              newStartColumn > existingEndColumn);
+      // Use actual position-based overlap detection instead of column-based
+      // This fixes the bug where fields touching at exact boundaries were incorrectly flagged as overlapping
+      final actualOverlap = !(newPosition.dx + newWidth <= config.position.dx || 
+                             newPosition.dx >= config.position.dx + config.width);
+      
+      print('  Position-based overlap: !(${newPosition.dx + newWidth} <= ${config.position.dx} || ${newPosition.dx} >= ${config.position.dx + config.width}) = $actualOverlap');
 
-      Logger.overlap(
-        'Overlap check: !($newEndColumn < $existingStartColumn || $newStartColumn > $existingEndColumn) = $wouldOverlapResult',
-      );
-
-      if (wouldOverlapResult) {
-        Logger.overlap('OVERLAP DETECTED!');
+      if (actualOverlap) {
+        print('  ❌ OVERLAP DETECTED with ${entry.key}!');
+        print('  Position-based overlap: $actualOverlap');
         return true; // Overlap detected
       }
     }
 
-    Logger.overlap('No overlap found');
+    print('  ✅ No overlap found');
     return false; // No overlap
   }
 
@@ -196,13 +158,13 @@ class MagneticCardSystem {
     String excludeFieldId, {
     int startFromRow = 0,
   }) {
-    final columnSpan = getColumnsFromWidth(fieldWidth);
+    final columnSpan = FieldConfig.getColumnsFromWidth(fieldWidth);
 
     for (int row = startFromRow; row < maxRows; row++) {
       // Try each possible starting column in this row (6-column grid)
       for (int startCol = 0; startCol <= 6 - columnSpan; startCol++) {
         final testPosition = Offset(
-          getColumnPositionNormalized(
+          FieldConfig.getColumnPositionNormalized(
             startCol,
           ), // Use proper 6-column positioning
           row * cardHeight,
@@ -224,7 +186,7 @@ class MagneticCardSystem {
     final bottomRow =
         existingFields.values
             .where((config) => config.isVisible)
-            .map((config) => getRowFromPosition(config.position.dy))
+            .map((config) => FieldConfig.getRowFromPosition(config.position.dy))
             .fold(0, (max, row) => row > max ? row : max) +
         1;
 
@@ -242,8 +204,8 @@ class MagneticCardSystem {
       final config = entry.value;
       if (!config.isVisible) continue;
 
-      final row = getRowFromPosition(config.position.dy);
-      final startColumn = getColumnFromPosition(
+      final row = FieldConfig.getRowFromPosition(config.position.dy);
+      final startColumn = FieldConfig.getColumnFromPosition(
         config.position.dx,
         containerWidth,
       );

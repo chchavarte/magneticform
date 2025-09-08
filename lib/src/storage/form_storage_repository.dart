@@ -1,4 +1,4 @@
-import '../models/field_config.dart';
+import '../models/field_models.dart';
 
 /// Abstract interface for form storage operations
 abstract class FormStorageRepository {

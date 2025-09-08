@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:magnetic_form_builder/src/models/field_config.dart';
+import 'package:magnetic_form_builder/src/models/field_models.dart';
 
 void main() {
   group('FieldConfig', () {

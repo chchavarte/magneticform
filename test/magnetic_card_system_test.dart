@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:magnetic_form_builder/src/models/magnetic_card_system.dart';
-import 'package:magnetic_form_builder/src/models/field_config.dart';
+import 'package:magnetic_form_builder/src/models/field_models.dart';
 
 void main() {
   group('MagneticCardSystem', () {
@@ -48,19 +48,19 @@ void main() {
     });
 
     test('should detect column from position correctly', () {
-      expect(MagneticCardSystem.getColumnFromPosition(0.0, containerWidth), 0);
-      expect(MagneticCardSystem.getColumnFromPosition(0.16, containerWidth), 0);
-      expect(MagneticCardSystem.getColumnFromPosition(0.17, containerWidth), 1);
-      expect(MagneticCardSystem.getColumnFromPosition(0.5, containerWidth), 3);
-      expect(MagneticCardSystem.getColumnFromPosition(0.83, containerWidth), 4);
-      expect(MagneticCardSystem.getColumnFromPosition(1.0, containerWidth), 5);
+      expect(FieldConfig.getColumnFromPosition(0.0, containerWidth), 0);
+      expect(FieldConfig.getColumnFromPosition(0.16, containerWidth), 0);
+      expect(FieldConfig.getColumnFromPosition(0.17, containerWidth), 1);
+      expect(FieldConfig.getColumnFromPosition(0.5, containerWidth), 3);
+      expect(FieldConfig.getColumnFromPosition(0.83, containerWidth), 4);
+      expect(FieldConfig.getColumnFromPosition(1.0, containerWidth), 5);
     });
 
     test('should calculate columns from width correctly', () {
-      expect(MagneticCardSystem.getColumnsFromWidth(2/6), 2);
-      expect(MagneticCardSystem.getColumnsFromWidth(3/6), 3);
-      expect(MagneticCardSystem.getColumnsFromWidth(4/6), 4);
-      expect(MagneticCardSystem.getColumnsFromWidth(6/6), 6);
+      expect(FieldConfig.getColumnsFromWidth(2/6), 2);
+      expect(FieldConfig.getColumnsFromWidth(3/6), 3);
+      expect(FieldConfig.getColumnsFromWidth(4/6), 4);
+      expect(FieldConfig.getColumnsFromWidth(6/6), 6);
     });
 
     test('should detect overlap correctly', () {

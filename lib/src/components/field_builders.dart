@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import '../constants/field_constants.dart';
+import '../constants/magnetic_constants.dart';
 import '../theme/magnetic_theme.dart';
-import '../utils/decoration_utils.dart';
-import '../models/field_config.dart';
-import '../models/form_field.dart';
+import '../utils/magnetic_utils.dart';
+import '../models/field_models.dart';
 
 /// Utility class for creating test fields with consistent styling and configuration.
 /// 
@@ -76,9 +75,9 @@ class TestFieldBuilder {
     required bool isCustomizationMode,
   }) {
     return Container(
-      height: FieldConstants.fieldHeight,
-      padding: FieldConstants.fieldPadding,
-      decoration: DecorationUtils.createFieldDecoration(
+      height: MagneticConstants.fieldHeight,
+      padding: MagneticConstants.fieldPadding,
+      decoration: MagneticUtils.createFieldDecoration(
         context: context,
         state: FieldDecorationState.normal,
         customColor: MagneticTheme.getFieldColor(context, fieldId),
@@ -87,7 +86,7 @@ class TestFieldBuilder {
       child: Center(
         child: Text(
           '$fieldId - $label Field',
-          style: const TextStyle(fontWeight: FieldConstants.fieldTextWeight),
+          style: const TextStyle(fontWeight: MagneticConstants.fieldTextWeight),
         ),
       ),
     );

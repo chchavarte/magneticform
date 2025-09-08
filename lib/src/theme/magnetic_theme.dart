@@ -5,220 +5,100 @@ import 'field_theme_extension.dart';
 /// 
 /// Provides default light and dark themes with field-specific styling extensions.
 /// Supports custom theme integration while maintaining consistent field appearance.
-/// 
-/// ## Usage
-/// 
-/// ### Default Themes
-/// ```dart
-/// // Use default light theme
-/// MaterialApp(
-///   theme: MagneticTheme.withFieldExtensions(MagneticTheme.lightTheme),
-///   home: MyFormScreen(),
-/// )
-/// 
-/// // Use default dark theme
-/// MaterialApp(
-///   darkTheme: MagneticTheme.withFieldExtensions(MagneticTheme.darkTheme),
-///   home: MyFormScreen(),
-/// )
-/// ```
-/// 
-/// ### Custom Themes
-/// ```dart
-/// final customTheme = ThemeData(
-///   colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
-/// );
-/// 
-/// MaterialApp(
-///   theme: MagneticTheme.withFieldExtensions(customTheme),
-///   home: MyFormScreen(),
-/// )
-/// ```
 class MagneticTheme {
   // Private constructor to prevent instantiation
   MagneticTheme._();
 
-  /// Primary seed color used for default themes.
-  /// 
-  /// This deep purple color provides the base for the default light and dark
-  /// color schemes. When using custom themes, this color is not used.
+  /// Primary seed color used for default themes
   static const Color _seedColor = Colors.deepPurple;
+  
+  /// Common app bar theme configuration
+  static const AppBarTheme _appBarTheme = AppBarTheme(
+    centerTitle: true,
+    elevation: 0.5,
+  );
 
-  /// Default light theme for the magnetic form builder.
-  /// 
-  /// Uses Material 3 design with a deep purple color scheme. Includes
-  /// optimized app bar styling for the form builder interface.
-  /// 
-  /// Example:
-  /// ```dart
-  /// MaterialApp(
-  ///   theme: MagneticTheme.withFieldExtensions(MagneticTheme.lightTheme),
-  ///   home: MyFormScreen(),
-  /// )
-  /// ```
-  static ThemeData get lightTheme {
+  /// Default light theme for the magnetic form builder
+  static ThemeData get lightTheme => _createTheme(Brightness.light);
+
+  /// Default dark theme for the magnetic form builder
+  static ThemeData get darkTheme => _createTheme(Brightness.dark);
+
+  /// Create theme with specified brightness
+  static ThemeData _createTheme(Brightness brightness) {
     return ThemeData(
       colorScheme: ColorScheme.fromSeed(
         seedColor: _seedColor,
-        brightness: Brightness.light,
+        brightness: brightness,
       ),
       useMaterial3: true,
-      appBarTheme: const AppBarTheme(
-        centerTitle: true,
-        elevation: 0.5,
-      ),
+      appBarTheme: _appBarTheme,
     );
   }
 
-  /// Default dark theme for the magnetic form builder.
-  /// 
-  /// Uses Material 3 design with a deep purple color scheme optimized for
-  /// dark mode. Includes consistent app bar styling with the light theme.
-  /// 
-  /// Example:
-  /// ```dart
-  /// MaterialApp(
-  ///   darkTheme: MagneticTheme.withFieldExtensions(MagneticTheme.darkTheme),
-  ///   themeMode: ThemeMode.system,
-  ///   home: MyFormScreen(),
-  /// )
-  /// ```
-  static ThemeData get darkTheme {
-    return ThemeData(
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: _seedColor,
-        brightness: Brightness.dark,
-      ),
-      useMaterial3: true,
-      appBarTheme: const AppBarTheme(
-        centerTitle: true,
-        elevation: 0.5,
-      ),
-    );
-  }
-
-  /// Gets a theme with field extensions, using custom or default theme data.
-  /// 
-  /// If [customTheme] is provided, it will be enhanced with field-specific
-  /// extensions. Otherwise, returns the default light or dark theme based
-  /// on the [isDark] parameter.
-  /// 
-  /// Example:
-  /// ```dart
-  /// // Use custom theme
-  /// final theme = MagneticTheme.getTheme(
-  ///   customTheme: myCustomTheme,
-  /// );
-  /// 
-  /// // Use default dark theme
-  /// final darkTheme = MagneticTheme.getTheme(isDark: true);
-  /// ```
+  /// Gets a theme with field extensions, using custom or default theme data
   static ThemeData getTheme({ThemeData? customTheme, bool isDark = false}) {
-    if (customTheme != null) {
-      return withFieldExtensions(customTheme);
-    }
-    return withFieldExtensions(isDark ? darkTheme : lightTheme);
+    final baseTheme = customTheme ?? (isDark ? darkTheme : lightTheme);
+    return withFieldExtensions(baseTheme);
   }
 
-  /// Gets the background color for a field based on its ID and current theme.
-  /// 
-  /// Different field IDs receive different colors to provide visual distinction
-  /// in the form builder interface. Colors are derived from the current theme's
-  /// color scheme to ensure consistency.
-  /// 
-  /// Parameters:
-  /// - [context]: Build context for accessing the current theme
-  /// - [fieldId]: Unique identifier of the field
-  /// 
-  /// Returns a color from the theme's color scheme containers.
+  /// Field color mapping for consistent theming
+  static const Map<String, int> _fieldColorMap = {
+    'field1': 0, // primaryContainer
+    'field2': 1, // secondaryContainer
+    'field3': 2, // tertiaryContainer
+    'field4': 3, // errorContainer
+    'field5': 4, // surfaceContainerHighest
+  };
+
+  /// Gets the background color for a field based on its ID and current theme
   static Color getFieldColor(BuildContext context, String fieldId) {
     final colorScheme = Theme.of(context).colorScheme;
+    final colorIndex = _fieldColorMap[fieldId] ?? -1;
     
-    switch (fieldId) {
-      case 'field1':
-        return colorScheme.primaryContainer;
-      case 'field2':
-        return colorScheme.secondaryContainer;
-      case 'field3':
-        return colorScheme.tertiaryContainer;
-      case 'field4':
-        return colorScheme.errorContainer;
-      case 'field5':
-        return colorScheme.surfaceContainerHighest;
-      default:
-        return colorScheme.surfaceContainer;
-    }
+    return switch (colorIndex) {
+      0 => colorScheme.primaryContainer,
+      1 => colorScheme.secondaryContainer,
+      2 => colorScheme.tertiaryContainer,
+      3 => colorScheme.errorContainer,
+      4 => colorScheme.surfaceContainerHighest,
+      _ => colorScheme.surfaceContainer,
+    };
   }
 
-  /// Gets the border color for a field based on its ID and current theme.
-  /// 
-  /// Provides consistent border colors that complement the field background
-  /// colors. Used for field outlines, selection indicators, and drag previews.
-  /// 
-  /// Parameters:
-  /// - [context]: Build context for accessing the current theme
-  /// - [fieldId]: Unique identifier of the field
-  /// 
-  /// Returns a color from the theme's color scheme.
+  /// Gets the border color for a field based on its ID and current theme
   static Color getFieldBorderColor(BuildContext context, String fieldId) {
     final colorScheme = Theme.of(context).colorScheme;
+    final colorIndex = _fieldColorMap[fieldId] ?? -1;
     
-    switch (fieldId) {
-      case 'field1':
-        return colorScheme.primary;
-      case 'field2':
-        return colorScheme.secondary;
-      case 'field3':
-        return colorScheme.tertiary;
-      case 'field4':
-        return colorScheme.error;
-      case 'field5':
-        return colorScheme.outline;
-      default:
-        return colorScheme.outline;
-    }
+    return switch (colorIndex) {
+      0 => colorScheme.primary,
+      1 => colorScheme.secondary,
+      2 => colorScheme.tertiary,
+      3 => colorScheme.error,
+      4 => colorScheme.outline,
+      _ => colorScheme.outline,
+    };
   }
 
-  /// Transparent color used for invisible resize handles and overlays.
-  /// 
-  /// Provides a consistent transparent color for UI elements that need to be
-  /// invisible but still capture touch events, such as resize handles.
+  /// Transparent color used for invisible resize handles and overlays
   static Color get transparentColor => Colors.transparent;
 
-  /// Enhances a theme with field-specific styling extensions.
-  /// 
-  /// Adds [FieldThemeExtension] to the provided theme, which includes colors
-  /// for drag operations, field selection, preview states, and grid guides.
-  /// This ensures consistent field styling across different base themes.
-  /// 
-  /// **Always use this method** when applying themes to ensure proper field
-  /// styling in the magnetic form builder.
-  /// 
-  /// Parameters:
-  /// - [baseTheme]: The base theme to enhance with field extensions
-  /// 
-  /// Returns the enhanced theme with field-specific styling.
-  /// 
-  /// Example:
-  /// ```dart
-  /// // Enhance default theme
-  /// final theme = MagneticTheme.withFieldExtensions(MagneticTheme.lightTheme);
-  /// 
-  /// // Enhance custom theme
-  /// final customTheme = ThemeData(colorScheme: myColorScheme);
-  /// final enhancedTheme = MagneticTheme.withFieldExtensions(customTheme);
-  /// ```
+  /// Enhances a theme with field-specific styling extensions
   static ThemeData withFieldExtensions(ThemeData baseTheme) {
     return baseTheme.copyWith(
-      extensions: [
-        FieldThemeExtension(
-          draggedFieldBorderColor: baseTheme.colorScheme.primary,
-          selectedFieldBorderColor: baseTheme.colorScheme.secondary,
-          previewFieldBackgroundColor: baseTheme.colorScheme.secondary.withValues(alpha: 0.1),
-          snapGuideColor: baseTheme.colorScheme.onSurface.withValues(alpha: 0.08),
-          snapGuideBackgroundColor: baseTheme.colorScheme.onSurface.withValues(alpha: 0.02),
-        ),
-      ],
+      extensions: [_createFieldExtension(baseTheme.colorScheme)],
+    );
+  }
+
+  /// Create field theme extension from color scheme
+  static FieldThemeExtension _createFieldExtension(ColorScheme colorScheme) {
+    return FieldThemeExtension(
+      draggedFieldBorderColor: colorScheme.primary,
+      selectedFieldBorderColor: colorScheme.secondary,
+      previewFieldBackgroundColor: colorScheme.secondary.withValues(alpha: 0.1),
+      snapGuideColor: colorScheme.onSurface.withValues(alpha: 0.08),
+      snapGuideBackgroundColor: colorScheme.onSurface.withValues(alpha: 0.02),
     );
   }
 }
