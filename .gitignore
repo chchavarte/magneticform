@@ -43,3 +43,17 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Test coverage reports
+coverage/
+*.lcov
+
+# IDE specific files
+.kiro/
+
+# Development and analysis reports
+*_report.md
+*_assessment.md
+documentation_update_report.md
+final_integration_test_report.md
+production_readiness_assessment.md
