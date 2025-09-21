@@ -57,6 +57,11 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
   // Hover timer for 0.3s delay
   Timer? _hoverTimer;
   int? _lastHoveredRow;
+  DropZone? _lastHoveredZone;
+
+  // Zone-based preview state
+  Map<String, FieldConfig> _zonePreviewConfigs = {};
+  bool _isShowingZonePreview = false;
 
   // Auto-resize feedback
   String? _autoResizeMessage;
@@ -103,6 +108,15 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
       controller.dispose();
     }
     super.dispose();
+  }
+
+  // Get fields in a specific row
+  List<MapEntry<String, FieldConfig>> _getFieldsInRow(int row, {String? excludeFieldId}) {
+    return _fieldConfigs.entries
+        .where((entry) => 
+            entry.key != excludeFieldId && 
+            MagneticCardSystem.getRowFromPosition(entry.value.position.dy) == row)
+        .toList();
   }
 
   Future<void> _loadFieldConfigurations() async {
@@ -453,13 +467,15 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
   }
 
   Widget _buildMagneticField(String fieldId, Widget field) {
-    final config = _fieldConfigs[fieldId];
+    // Use zone preview configs if showing preview, otherwise use actual configs
+    final configs = _isShowingZonePreview ? _zonePreviewConfigs : _fieldConfigs;
+    final config = configs[fieldId];
     if (config == null) return const SizedBox.shrink();
 
     final isSelected = _selectedFieldId == fieldId;
     final isDragged = _dragState?.draggedFieldId == fieldId;
-    final isInPreview =
-        _previewState.isActive && fieldId != _previewState.draggedFieldId;
+    final isInPreview = (_previewState.isActive && fieldId != _previewState.draggedFieldId) ||
+                       (_isShowingZonePreview && fieldId != _dragState?.draggedFieldId);
 
     return FormUIBuilder.buildMagneticField(
       context: context,
@@ -534,23 +550,245 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
     }
   }
 
-  // Handle preview logic for hover effects with 0.3s delay
+  // Handle preview logic with zone-based approach and 0.3s delay
   void _handlePreviewLogic(String fieldId, int hoveredRow) {
-    // Check if we're hovering over a new row
-    if (_lastHoveredRow != hoveredRow) {
-      // Cancel existing timer
+    if (_dragState == null) return;
+
+    // Detect drop zone
+    final zoneResult = DragHandler.detectDropZone(
+      position: _fieldConfigs[fieldId]!.position,
+      containerWidth: _containerWidth,
+    );
+
+    // Check if we're hovering over a new row or zone
+    if (_lastHoveredRow != hoveredRow || _lastHoveredZone != zoneResult.zone) {
+      // Cancel existing timer and clear previews
       _hoverTimer?.cancel();
+      _clearZonePreview();
+      
       _lastHoveredRow = hoveredRow;
+      _lastHoveredZone = zoneResult.zone;
       
       // Start new timer for 0.3s delay
       _hoverTimer = Timer(const Duration(milliseconds: 300), () {
-        // Show preview after delay - use existing preview logic
-        _showPreview(fieldId, hoveredRow);
+        _handleZoneDrop(fieldId, hoveredRow, zoneResult.zone);
       });
     }
   }
 
-  // Show preview positions
+  // Handle drop based on zone
+  void _handleZoneDrop(String fieldId, int targetRow, DropZone zone) {
+    switch (zone) {
+      case DropZone.leftDrop:
+        _handleLeftDrop(fieldId, targetRow);
+        break;
+      case DropZone.centerDrop:
+        _handleCenterDrop(fieldId, targetRow);
+        break;
+      case DropZone.rightDrop:
+        _handleRightDrop(fieldId, targetRow);
+        break;
+      case DropZone.pushDown:
+        _handlePushDown(fieldId, targetRow);
+        break;
+    }
+  }
+
+  // Handle right-side drop (move dragged field to rightmost, shift others left)
+  void _handleRightDrop(String fieldId, int targetRow) {
+    final fieldsInRow = _getFieldsInRow(targetRow, excludeFieldId: fieldId);
+    
+    // Check if we can accommodate the field (max 3 fields total)
+    if (fieldsInRow.length >= 3) {
+      Logger.preview('Row $targetRow full, falling back to push-down');
+      _handlePushDown(fieldId, targetRow);
+      return;
+    }
+
+    Logger.preview('Right drop: field $fieldId targeting row $targetRow with ${fieldsInRow.length} existing fields');
+
+    final totalFields = fieldsInRow.length + 1;
+    final fieldWidth = 1.0 / totalFields;
+    
+    // Sort existing fields by their current position (left to right)
+    fieldsInRow.sort((a, b) => a.value.position.dx.compareTo(b.value.position.dx));
+    
+    final previewConfigs = <String, FieldConfig>{};
+    
+    // Position existing fields on the left, maintaining their relative order
+    for (int i = 0; i < fieldsInRow.length; i++) {
+      final existingField = fieldsInRow[i];
+      final newX = i * fieldWidth; // Keep existing fields at positions 0, 1, 2...
+      
+      previewConfigs[existingField.key] = existingField.value.copyWith(
+        position: Offset(newX, existingField.value.position.dy),
+        width: fieldWidth,
+      );
+    }
+    
+    // Position dragged field at rightmost position (last index)
+    final draggedFieldX = (totalFields - 1) * fieldWidth;
+    previewConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
+      position: Offset(draggedFieldX, targetRow * MagneticCardSystem.cardHeight),
+      width: fieldWidth,
+    );
+
+    // Copy other fields unchanged
+    for (final entry in _fieldConfigs.entries) {
+      if (!previewConfigs.containsKey(entry.key)) {
+        previewConfigs[entry.key] = entry.value;
+      }
+    }
+
+    setState(() {
+      _zonePreviewConfigs = previewConfigs;
+      _isShowingZonePreview = true;
+    });
+
+    final widthPercent = (fieldWidth * 100).toInt();
+    _showAutoResizeMessage('Right drop: $fieldId moves right, others shift left ($totalFields fields at $widthPercent% each)');
+  }
+
+  // Handle left-side drop (move dragged field to leftmost, shift others right) 
+  void _handleLeftDrop(String fieldId, int targetRow) {
+    final fieldsInRow = _getFieldsInRow(targetRow, excludeFieldId: fieldId);
+    
+    if (fieldsInRow.length >= 3) {
+      Logger.preview('Row $targetRow full, falling back to push-down');
+      _handlePushDown(fieldId, targetRow);
+      return;
+    }
+
+    Logger.preview('Left drop: field $fieldId targeting row $targetRow with ${fieldsInRow.length} existing fields');
+
+    final totalFields = fieldsInRow.length + 1;
+    final fieldWidth = 1.0 / totalFields;
+    
+    // Sort existing fields by their current position (left to right)
+    fieldsInRow.sort((a, b) => a.value.position.dx.compareTo(b.value.position.dx));
+    
+    final previewConfigs = <String, FieldConfig>{};
+    
+    // Position dragged field at leftmost position (index 0)
+    previewConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
+      position: Offset(0, targetRow * MagneticCardSystem.cardHeight),
+      width: fieldWidth,
+    );
+    
+    // Shift existing fields right, maintaining their relative order
+    for (int i = 0; i < fieldsInRow.length; i++) {
+      final existingField = fieldsInRow[i];
+      final newX = (i + 1) * fieldWidth; // +1 to make room for dragged field at position 0
+      
+      previewConfigs[existingField.key] = existingField.value.copyWith(
+        position: Offset(newX, existingField.value.position.dy),
+        width: fieldWidth,
+      );
+    }
+
+    // Copy other fields unchanged
+    for (final entry in _fieldConfigs.entries) {
+      if (!previewConfigs.containsKey(entry.key)) {
+        previewConfigs[entry.key] = entry.value;
+      }
+    }
+
+    setState(() {
+      _zonePreviewConfigs = previewConfigs;
+      _isShowingZonePreview = true;
+    });
+
+    final widthPercent = (fieldWidth * 100).toInt();
+    _showAutoResizeMessage('Left drop: $fieldId moves left, others shift right ($totalFields fields at $widthPercent% each)');
+  }
+
+  // Handle center drop (split fields)
+  void _handleCenterDrop(String fieldId, int targetRow) {
+    final fieldsInRow = _getFieldsInRow(targetRow, excludeFieldId: fieldId);
+    
+    if (fieldsInRow.length >= 3) {
+      Logger.preview('Row $targetRow full, falling back to push-down');
+      _handlePushDown(fieldId, targetRow);
+      return;
+    }
+
+    Logger.preview('Center drop: field $fieldId targeting row $targetRow with ${fieldsInRow.length} existing fields');
+
+    final totalFields = fieldsInRow.length + 1;
+    final fieldWidth = 1.0 / totalFields;
+    
+    final previewConfigs = <String, FieldConfig>{};
+    
+    if (fieldsInRow.length == 1) {
+      // Split into two halves
+      previewConfigs[fieldsInRow[0].key] = fieldsInRow[0].value.copyWith(
+        position: Offset(0, fieldsInRow[0].value.position.dy),
+        width: 0.5,
+      );
+      previewConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
+        position: Offset(0.5, targetRow * MagneticCardSystem.cardHeight),
+        width: 0.5,
+      );
+    } else {
+      // Equal distribution with dragged field in middle
+      final midPoint = fieldsInRow.length ~/ 2;
+      
+      // Left fields
+      for (int i = 0; i < midPoint; i++) {
+        previewConfigs[fieldsInRow[i].key] = fieldsInRow[i].value.copyWith(
+          position: Offset(i * fieldWidth, fieldsInRow[i].value.position.dy),
+          width: fieldWidth,
+        );
+      }
+      
+      // Dragged field in center
+      previewConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
+        position: Offset(midPoint * fieldWidth, targetRow * MagneticCardSystem.cardHeight),
+        width: fieldWidth,
+      );
+      
+      // Right fields
+      for (int i = midPoint; i < fieldsInRow.length; i++) {
+        previewConfigs[fieldsInRow[i].key] = fieldsInRow[i].value.copyWith(
+          position: Offset((i + 1) * fieldWidth, fieldsInRow[i].value.position.dy),
+          width: fieldWidth,
+        );
+      }
+    }
+
+    // Copy other fields unchanged
+    for (final entry in _fieldConfigs.entries) {
+      if (!previewConfigs.containsKey(entry.key)) {
+        previewConfigs[entry.key] = entry.value;
+      }
+    }
+
+    setState(() {
+      _zonePreviewConfigs = previewConfigs;
+      _isShowingZonePreview = true;
+    });
+
+    final widthPercent = (fieldWidth * 100).toInt();
+    _showAutoResizeMessage('Center drop: $totalFields fields at $widthPercent% width each');
+  }
+
+  // Handle push down (use existing logic)
+  void _handlePushDown(String fieldId, int targetRow) {
+    Logger.preview('Push down: field $fieldId to row $targetRow');
+    _showPreview(fieldId, targetRow);
+  }
+
+  // Clear zone preview
+  void _clearZonePreview() {
+    if (_isShowingZonePreview) {
+      setState(() {
+        _zonePreviewConfigs.clear();
+        _isShowingZonePreview = false;
+      });
+    }
+  }
+
+  // Show preview positions (existing push-down logic)
   void _showPreview(String fieldId, int targetRow) {
     Logger.preview('Field $fieldId targeting row $targetRow');
     GridUtils.printFieldConfigs(
@@ -629,31 +867,67 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
   void _onFieldDragEnd(String fieldId, LongPressEndDetails details) {
     if (_dragState == null) return;
 
-    final result = DragHandler.handleFieldDragEnd(
-      fieldId: fieldId,
-      fieldConfigs: _fieldConfigs,
-      containerWidth: _containerWidth,
-      previewState: _previewState,
-    );
-
-    if (result.shouldCommitPreview) {
-      _commitPreview(fieldId);
+    if (_isShowingZonePreview) {
+      // Commit zone preview
+      _commitZonePreview(fieldId);
     } else {
-      _handleStandardDragEnd(fieldId, result.finalPosition);
+      // Handle standard drag end
+      final result = DragHandler.handleFieldDragEnd(
+        fieldId: fieldId,
+        fieldConfigs: _fieldConfigs,
+        containerWidth: _containerWidth,
+        previewState: _previewState,
+      );
+
+      if (result.shouldCommitPreview) {
+        _commitPreview(fieldId);
+      } else {
+        _handleStandardDragEnd(fieldId, result.finalPosition);
+      }
     }
 
-    // Clean up drag state
+    // Clean up drag and hover state
     _hoverTimer?.cancel();
+    _clearZonePreview();
     setState(() {
       _dragState = null;
       _hoveredColumn = null;
       _hoveredRow = null;
       _lastHoveredRow = null;
+      _lastHoveredZone = null;
       _originalPositions.clear();
       _temporarilyMovedFields.clear();
     });
 
     _previewState = PreviewState.initial();
+  }
+
+  // Commit zone preview positions
+  void _commitZonePreview(String fieldId) {
+    Logger.success('Committing zone preview for field $fieldId');
+
+    // Animate from current positions to preview positions
+    FieldPreviewSystem.animateToCommit(
+      vsync: this,
+      fromConfigs: _fieldConfigs,
+      toConfigs: _zonePreviewConfigs,
+      onUpdate: (configs) {
+        setState(() {
+          _fieldConfigs = configs;
+        });
+      },
+      onComplete: () {
+        _pullUpFieldsToFillGaps();
+        _autoExpandToFillGaps();
+        _saveFieldConfigurations();
+      },
+    );
+
+    // Clear preview state
+    setState(() {
+      _zonePreviewConfigs.clear();
+      _isShowingZonePreview = false;
+    });
   }
 
   // Commit preview positions with animation

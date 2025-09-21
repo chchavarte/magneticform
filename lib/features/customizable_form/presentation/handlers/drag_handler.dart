@@ -78,6 +78,38 @@ class DragHandler {
     );
   }
 
+  /// Detect drop zone based on position
+  static DropZoneResult detectDropZone({
+    required Offset position,
+    required double containerWidth,
+  }) {
+    final gridPosition = MagneticCardSystem.getGridPosition(position, containerWidth);
+    final row = gridPosition.row;
+    final column = gridPosition.column;
+    
+    // Calculate relative position within the row
+    final rowY = row * MagneticCardSystem.cardHeight;
+    final relativeY = (position.dy - rowY) / MagneticCardSystem.cardHeight;
+    
+    // Push down zones (top/bottom 10% of row)
+    if (relativeY < 0.1 || relativeY > 0.9) {
+      return DropZoneResult(zone: DropZone.pushDown, row: row, column: column);
+    }
+    
+    // Drop zones in middle 60% of row based on horizontal position
+    final x = position.dx;
+    DropZone zone;
+    if (x < 0.33) {
+      zone = DropZone.leftDrop;
+    } else if (x < 0.67) {
+      zone = DropZone.centerDrop;
+    } else {
+      zone = DropZone.rightDrop;
+    }
+    
+    return DropZoneResult(zone: zone, row: row, column: column);
+  }
+
   /// Handle field drag end
   static DragEndResult handleFieldDragEnd({
     required String fieldId,
@@ -188,5 +220,26 @@ class DragEndResult {
     required this.shouldCommitPreview,
     required this.finalPosition,
     required this.finalConfigs,
+  });
+}
+
+/// Drop zones for clear behavior definition
+enum DropZone {
+  leftDrop,   // Left third - push fields right
+  centerDrop, // Center third - split fields
+  rightDrop,  // Right third - push fields left
+  pushDown,   // Top/bottom 20% - push to next row
+}
+
+/// Result of drop zone detection
+class DropZoneResult {
+  final DropZone zone;
+  final int row;
+  final int column;
+
+  const DropZoneResult({
+    required this.zone,
+    required this.row,
+    required this.column,
   });
 }

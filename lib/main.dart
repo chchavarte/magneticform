@@ -15,7 +15,8 @@ class MyApp extends StatelessWidget {
       title: AppConstants.appTitle,
       theme: AppTheme.withFieldExtensions(AppTheme.lightTheme),
       darkTheme: AppTheme.withFieldExtensions(AppTheme.darkTheme),
-      themeMode: ThemeMode.system, // Automatically switch based on system preference
+      themeMode:
+          ThemeMode.system, // Automatically switch based on system preference
       home: const TestFormScreen(),
     );
   }
@@ -27,10 +28,12 @@ class TestFormScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Create test fields using the centralized builder
-    final List<CustomFormField> testFields = TestFieldBuilder.createTestFields();
+    final List<CustomFormField> testFields =
+        TestFieldBuilder.createTestFields();
 
     // Create default field configurations using centralized data
-    final Map<String, FieldConfig> defaultConfigs = TestFieldBuilder.createDefaultConfigs();
+    final Map<String, FieldConfig> defaultConfigs =
+        TestFieldBuilder.createDefaultConfigs();
 
     return CustomizableFormScreen(
       availableFields: testFields,
