@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
+import 'dart:async';
 import 'package:field_collision_test/core/constants/animation_constants.dart';
 import 'package:field_collision_test/core/utils/logger.dart';
 import '../handlers/resize_handler.dart';
@@ -53,8 +54,9 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
   int? _hoveredColumn;
   int? _hoveredRow;
 
-  // Throttling for rearrangement to prevent excessive calls
-  DateTime? _lastRearrangementTime;
+  // Hover timer for 0.3s delay
+  Timer? _hoverTimer;
+  int? _lastHoveredRow;
 
   // Auto-resize feedback
   String? _autoResizeMessage;
@@ -96,6 +98,7 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
 
   @override
   void dispose() {
+    _hoverTimer?.cancel();
     for (var controller in _controllers.values) {
       controller.dispose();
     }
@@ -531,20 +534,19 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
     }
   }
 
-  // Handle preview logic for hover effects
+  // Handle preview logic for hover effects with 0.3s delay
   void _handlePreviewLogic(String fieldId, int hoveredRow) {
-    // Throttle preview updates to prevent excessive calls
-    final now = DateTime.now();
-    if (_lastRearrangementTime != null &&
-        now.difference(_lastRearrangementTime!).inMilliseconds < 100) {
-      return;
-    }
-    _lastRearrangementTime = now;
-
     // Check if we're hovering over a new row
-    if (_previewState.targetRow != hoveredRow) {
-      // Always show preview - either direct placement or push down
-      _showPreview(fieldId, hoveredRow);
+    if (_lastHoveredRow != hoveredRow) {
+      // Cancel existing timer
+      _hoverTimer?.cancel();
+      _lastHoveredRow = hoveredRow;
+      
+      // Start new timer for 0.3s delay
+      _hoverTimer = Timer(const Duration(milliseconds: 300), () {
+        // Show preview after delay - use existing preview logic
+        _showPreview(fieldId, hoveredRow);
+      });
     }
   }
 
@@ -641,10 +643,12 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
     }
 
     // Clean up drag state
+    _hoverTimer?.cancel();
     setState(() {
       _dragState = null;
       _hoveredColumn = null;
       _hoveredRow = null;
+      _lastHoveredRow = null;
       _originalPositions.clear();
       _temporarilyMovedFields.clear();
     });
