@@ -87,41 +87,8 @@ class FormUIBuilder {
     required double containerWidth,
     required Map<String, FieldConfig> fieldConfigs,
   }) {
-    if (!previewState.isActive ||
-        previewState.previewInfo?.targetPosition == null ||
-        previewState.previewInfo?.hasSpace != true) {
-      return const SizedBox.shrink();
-    }
-
-    final theme = Theme.of(context);
-    final targetPosition = previewState.previewInfo!.targetPosition!;
-    final draggedField = fieldConfigs[previewState.draggedFieldId!]!;
-
-    final fieldWidth = draggedField.width * containerWidth;
-    final leftPosition = targetPosition.dx * containerWidth;
-
-    return Positioned(
-      left: leftPosition,
-      top: targetPosition.dy + 8,
-      child: Container(
-        width: fieldWidth - (targetPosition.dx > 0 ? MagneticCardSystem.fieldGap : 0),
-        height: MagneticCardSystem.cardHeight,
-        margin: EdgeInsets.only(
-          left: targetPosition.dx > 0 ? MagneticCardSystem.fieldGap : 0,
-        ),
-        decoration: DecorationUtils.createFieldDecoration(
-          context: context,
-          state: FieldDecorationState.previewIndicator,
-        ),
-        child: Center(
-          child: Icon(
-            Icons.place,
-            color: theme.colorScheme.primary.withValues(alpha: 0.7),
-            size: 24,
-          ),
-        ),
-      ),
-    );
+    // Preview indicator disabled - return empty widget
+    return const SizedBox.shrink();
   }
 
   /// Build auto-resize message

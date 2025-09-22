@@ -85,6 +85,28 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
   // Helper getter for theme access
   ThemeData get _theme => Theme.of(context);
 
+  // Apply subtle magnetic pull to guide field positioning
+  double _applySubtleMagnetism(double idealX) {
+    const magnetStrength = 0.015; // Very subtle pull (1.5%)
+    
+    // Center magnetic zone: 40-55% → pull toward 47.5% (center of dropzone)
+    if (idealX >= 0.40 && idealX <= 0.55) {
+      final centerTarget = 0.475; // Center of center dropzone
+      final pullDirection = centerTarget - idealX;
+      return idealX + (pullDirection * magnetStrength);
+    }
+    
+    // Right magnetic zone: 70-100% → pull toward 82.5% (center of right dropzone)  
+    if (idealX >= 0.70 && idealX <= 1.0) {
+      final rightTarget = 0.825; // Center of right dropzone
+      final pullDirection = rightTarget - idealX;
+      return idealX + (pullDirection * magnetStrength);
+    }
+    
+    // No magnetism in left zone (0-40%) - let clamping work naturally
+    return idealX;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -527,14 +549,14 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
         _originalWidths[entry.key] = entry.value.width;
       }
 
-      // Shrink dragged field to consistent 25% size, centered under cursor
+      // Shrink dragged field to consistent 33% size, centered under cursor
       final cursorX =
           details.globalPosition.dx / _containerWidth; // Cursor position (0-1)
-      final newWidth = 0.25; // 25% width
-      final newX = (cursorX - newWidth / 2).clamp(
-        0.0,
-        1.0 - newWidth,
-      ); // Center under cursor
+      final newWidth = 1.0 / 3.0; // 33% width (1/3 - matches 3-field row)
+      // Apply subtle magnetic pull in specific zones
+      final idealX = cursorX - newWidth / 2;
+      final magneticX = _applySubtleMagnetism(idealX);
+      final newX = magneticX.clamp(0.0, 1.0 - newWidth); // Center under cursor with magnetism
 
       _fieldConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
         width: newWidth,
