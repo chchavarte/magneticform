@@ -190,19 +190,22 @@ class FormUIBuilder {
             behavior: HitTestBehavior.opaque,
             child: AbsorbPointer(
               absorbing: isCustomizationMode,
-              child: Container(
-                width: fieldWidth - (config.position.dx > 0 ? MagneticCardSystem.fieldGap : 0),
-                margin: EdgeInsets.only(
-                  left: config.position.dx > 0 ? MagneticCardSystem.fieldGap : 0,
+              child: Opacity(
+                opacity: isDragged ? 0.7 : 1.0, // Semi-transparent when dragged
+                child: Container(
+                  width: fieldWidth - (config.position.dx > 0 ? MagneticCardSystem.fieldGap : 0),
+                  margin: EdgeInsets.only(
+                    left: config.position.dx > 0 ? MagneticCardSystem.fieldGap : 0,
+                  ),
+                  decoration: _getFieldDecoration(
+                    context,
+                    isDragged: isDragged,
+                    isInPreview: isInPreview,
+                    isSelected: isSelected,
+                    isCustomizationMode: isCustomizationMode,
+                  ),
+                  child: field,
                 ),
-                decoration: _getFieldDecoration(
-                  context,
-                  isDragged: isDragged,
-                  isInPreview: isInPreview,
-                  isSelected: isSelected,
-                  isCustomizationMode: isCustomizationMode,
-                ),
-                child: field,
               ),
             ),
           ),

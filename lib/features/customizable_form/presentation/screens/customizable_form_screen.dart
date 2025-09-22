@@ -72,6 +72,7 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
 
   // Magnetic timeline: Store original positions for restoration
   final Map<String, Offset> _originalPositions = {};
+  final Map<String, double> _originalWidths = {};
   final Set<String> _temporarilyMovedFields = {};
 
   // Form data storage
@@ -111,17 +112,25 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
   }
 
   // Get fields in a specific row
-  List<MapEntry<String, FieldConfig>> _getFieldsInRow(int row, {String? excludeFieldId}) {
+  List<MapEntry<String, FieldConfig>> _getFieldsInRow(
+    int row, {
+    String? excludeFieldId,
+  }) {
     return _fieldConfigs.entries
-        .where((entry) => 
-            entry.key != excludeFieldId && 
-            MagneticCardSystem.getRowFromPosition(entry.value.position.dy) == row)
+        .where(
+          (entry) =>
+              entry.key != excludeFieldId &&
+              MagneticCardSystem.getRowFromPosition(entry.value.position.dy) ==
+                  row,
+        )
         .toList();
   }
 
   Future<void> _loadFieldConfigurations() async {
     try {
-      final savedConfigs = await _repository.loadConfigurations(widget.storageKey);
+      final savedConfigs = await _repository.loadConfigurations(
+        widget.storageKey,
+      );
       setState(() {
         if (savedConfigs.isNotEmpty) {
           _fieldConfigs = savedConfigs;
@@ -474,8 +483,9 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
 
     final isSelected = _selectedFieldId == fieldId;
     final isDragged = _dragState?.draggedFieldId == fieldId;
-    final isInPreview = (_previewState.isActive && fieldId != _previewState.draggedFieldId) ||
-                       (_isShowingZonePreview && fieldId != _dragState?.draggedFieldId);
+    final isInPreview =
+        (_previewState.isActive && fieldId != _previewState.draggedFieldId) ||
+        (_isShowingZonePreview && fieldId != _dragState?.draggedFieldId);
 
     return FormUIBuilder.buildMagneticField(
       context: context,
@@ -508,12 +518,28 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
       _selectedFieldId = fieldId; // Also select the field
       _previewState = PreviewState.initial();
 
-      // Store original positions for restoration
+      // Store original positions and widths for restoration
       _originalPositions.clear();
+      _originalWidths.clear();
       _temporarilyMovedFields.clear();
       for (final entry in _fieldConfigs.entries) {
         _originalPositions[entry.key] = entry.value.position;
+        _originalWidths[entry.key] = entry.value.width;
       }
+
+      // Shrink dragged field to consistent 25% size, centered under cursor
+      final cursorX =
+          details.globalPosition.dx / _containerWidth; // Cursor position (0-1)
+      final newWidth = 0.25; // 25% width
+      final newX = (cursorX - newWidth / 2).clamp(
+        0.0,
+        1.0 - newWidth,
+      ); // Center under cursor
+
+      _fieldConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
+        width: newWidth,
+        position: Offset(newX, _fieldConfigs[fieldId]!.position.dy),
+      );
     });
   }
 
@@ -565,10 +591,10 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
       // Cancel existing timer and clear previews
       _hoverTimer?.cancel();
       _clearZonePreview();
-      
+
       _lastHoveredRow = hoveredRow;
       _lastHoveredZone = zoneResult.zone;
-      
+
       // Start new timer for reduced delay (200ms for better responsiveness)
       _hoverTimer = Timer(const Duration(milliseconds: 200), () {
         _handleZoneDrop(fieldId, hoveredRow, zoneResult.zone);
@@ -597,7 +623,7 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
   // Handle right-side drop (move dragged field to rightmost, shift others left)
   void _handleRightDrop(String fieldId, int targetRow) {
     final fieldsInRow = _getFieldsInRow(targetRow, excludeFieldId: fieldId);
-    
+
     // Check if we can accommodate the field (max 3 fields total)
     if (fieldsInRow.length >= 3) {
       Logger.preview('Row $targetRow full, falling back to push-down');
@@ -605,31 +631,39 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
       return;
     }
 
-    Logger.preview('Right drop: field $fieldId targeting row $targetRow with ${fieldsInRow.length} existing fields');
+    Logger.preview(
+      'Right drop: field $fieldId targeting row $targetRow with ${fieldsInRow.length} existing fields',
+    );
 
     final totalFields = fieldsInRow.length + 1;
     final fieldWidth = 1.0 / totalFields;
-    
+
     // Sort existing fields by their current position (left to right)
-    fieldsInRow.sort((a, b) => a.value.position.dx.compareTo(b.value.position.dx));
-    
+    fieldsInRow.sort(
+      (a, b) => a.value.position.dx.compareTo(b.value.position.dx),
+    );
+
     final previewConfigs = <String, FieldConfig>{};
-    
+
     // Position existing fields on the left, maintaining their relative order
     for (int i = 0; i < fieldsInRow.length; i++) {
       final existingField = fieldsInRow[i];
-      final newX = i * fieldWidth; // Keep existing fields at positions 0, 1, 2...
-      
+      final newX =
+          i * fieldWidth; // Keep existing fields at positions 0, 1, 2...
+
       previewConfigs[existingField.key] = existingField.value.copyWith(
         position: Offset(newX, existingField.value.position.dy),
         width: fieldWidth,
       );
     }
-    
+
     // Position dragged field at rightmost position (last index)
     final draggedFieldX = (totalFields - 1) * fieldWidth;
     previewConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
-      position: Offset(draggedFieldX, targetRow * MagneticCardSystem.cardHeight),
+      position: Offset(
+        draggedFieldX,
+        targetRow * MagneticCardSystem.cardHeight,
+      ),
       width: fieldWidth,
     );
 
@@ -641,40 +675,49 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
     }
 
     final widthPercent = (fieldWidth * 100).toInt();
-    _applyZonePreviewSmooth(previewConfigs, 'Right drop: $fieldId moves right, others shift left ($totalFields fields at $widthPercent% each)');
+    _applyZonePreviewSmooth(
+      previewConfigs,
+      'Right drop: $fieldId moves right, others shift left ($totalFields fields at $widthPercent% each)',
+    );
   }
 
-  // Handle left-side drop (move dragged field to leftmost, shift others right) 
+  // Handle left-side drop (move dragged field to leftmost, shift others right)
   void _handleLeftDrop(String fieldId, int targetRow) {
     final fieldsInRow = _getFieldsInRow(targetRow, excludeFieldId: fieldId);
-    
+
     if (fieldsInRow.length >= 3) {
       Logger.preview('Row $targetRow full, falling back to push-down');
       _handlePushDown(fieldId, targetRow);
       return;
     }
 
-    Logger.preview('Left drop: field $fieldId targeting row $targetRow with ${fieldsInRow.length} existing fields');
+    Logger.preview(
+      'Left drop: field $fieldId targeting row $targetRow with ${fieldsInRow.length} existing fields',
+    );
 
     final totalFields = fieldsInRow.length + 1;
     final fieldWidth = 1.0 / totalFields;
-    
+
     // Sort existing fields by their current position (left to right)
-    fieldsInRow.sort((a, b) => a.value.position.dx.compareTo(b.value.position.dx));
-    
+    fieldsInRow.sort(
+      (a, b) => a.value.position.dx.compareTo(b.value.position.dx),
+    );
+
     final previewConfigs = <String, FieldConfig>{};
-    
+
     // Position dragged field at leftmost position (index 0)
     previewConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
       position: Offset(0, targetRow * MagneticCardSystem.cardHeight),
       width: fieldWidth,
     );
-    
+
     // Shift existing fields right, maintaining their relative order
     for (int i = 0; i < fieldsInRow.length; i++) {
       final existingField = fieldsInRow[i];
-      final newX = (i + 1) * fieldWidth; // +1 to make room for dragged field at position 0
-      
+      final newX =
+          (i + 1) *
+          fieldWidth; // +1 to make room for dragged field at position 0
+
       previewConfigs[existingField.key] = existingField.value.copyWith(
         position: Offset(newX, existingField.value.position.dy),
         width: fieldWidth,
@@ -689,26 +732,31 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
     }
 
     final widthPercent = (fieldWidth * 100).toInt();
-    _applyZonePreviewSmooth(previewConfigs, 'Left drop: $fieldId moves left, others shift right ($totalFields fields at $widthPercent% each)');
+    _applyZonePreviewSmooth(
+      previewConfigs,
+      'Left drop: $fieldId moves left, others shift right ($totalFields fields at $widthPercent% each)',
+    );
   }
 
   // Handle center drop (split fields)
   void _handleCenterDrop(String fieldId, int targetRow) {
     final fieldsInRow = _getFieldsInRow(targetRow, excludeFieldId: fieldId);
-    
+
     if (fieldsInRow.length >= 3) {
       Logger.preview('Row $targetRow full, falling back to push-down');
       _handlePushDown(fieldId, targetRow);
       return;
     }
 
-    Logger.preview('Center drop: field $fieldId targeting row $targetRow with ${fieldsInRow.length} existing fields');
+    Logger.preview(
+      'Center drop: field $fieldId targeting row $targetRow with ${fieldsInRow.length} existing fields',
+    );
 
     final totalFields = fieldsInRow.length + 1;
     final fieldWidth = 1.0 / totalFields;
-    
+
     final previewConfigs = <String, FieldConfig>{};
-    
+
     if (fieldsInRow.length == 1) {
       // Split into two halves
       previewConfigs[fieldsInRow[0].key] = fieldsInRow[0].value.copyWith(
@@ -722,7 +770,7 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
     } else {
       // Equal distribution with dragged field in middle
       final midPoint = fieldsInRow.length ~/ 2;
-      
+
       // Left fields
       for (int i = 0; i < midPoint; i++) {
         previewConfigs[fieldsInRow[i].key] = fieldsInRow[i].value.copyWith(
@@ -730,17 +778,23 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
           width: fieldWidth,
         );
       }
-      
+
       // Dragged field in center
       previewConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
-        position: Offset(midPoint * fieldWidth, targetRow * MagneticCardSystem.cardHeight),
+        position: Offset(
+          midPoint * fieldWidth,
+          targetRow * MagneticCardSystem.cardHeight,
+        ),
         width: fieldWidth,
       );
-      
+
       // Right fields
       for (int i = midPoint; i < fieldsInRow.length; i++) {
         previewConfigs[fieldsInRow[i].key] = fieldsInRow[i].value.copyWith(
-          position: Offset((i + 1) * fieldWidth, fieldsInRow[i].value.position.dy),
+          position: Offset(
+            (i + 1) * fieldWidth,
+            fieldsInRow[i].value.position.dy,
+          ),
           width: fieldWidth,
         );
       }
@@ -754,7 +808,10 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
     }
 
     final widthPercent = (fieldWidth * 100).toInt();
-    _applyZonePreviewSmooth(previewConfigs, 'Center drop: $totalFields fields at $widthPercent% width each');
+    _applyZonePreviewSmooth(
+      previewConfigs,
+      'Center drop: $totalFields fields at $widthPercent% width each',
+    );
   }
 
   // Handle push down (use existing logic)
@@ -793,7 +850,10 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
   }
 
   // Apply zone preview with smooth transition
-  void _applyZonePreviewSmooth(Map<String, FieldConfig> previewConfigs, String message) {
+  void _applyZonePreviewSmooth(
+    Map<String, FieldConfig> previewConfigs,
+    String message,
+  ) {
     if (_isShowingZonePreview) {
       // Animate from current preview to new preview
       FieldPreviewSystem.animateHoverEnter(
@@ -830,7 +890,7 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
         },
       );
     }
-    
+
     _showAutoResizeMessage(message);
   }
 
@@ -942,6 +1002,7 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
       _lastHoveredRow = null;
       _lastHoveredZone = null;
       _originalPositions.clear();
+      _originalWidths.clear();
       _temporarilyMovedFields.clear();
     });
 
@@ -1036,8 +1097,12 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
   // Handle standard drag end without preview
   void _handleStandardDragEnd(String fieldId, Offset finalPosition) {
     setState(() {
+      // Restore original width when drag ends
+      final originalWidth =
+          _originalWidths[fieldId] ?? _fieldConfigs[fieldId]!.width;
       _fieldConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
         position: finalPosition,
+        width: originalWidth,
       );
     });
 
