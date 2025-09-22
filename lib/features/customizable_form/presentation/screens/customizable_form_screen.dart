@@ -1100,10 +1100,25 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
       // Restore original width when drag ends
       final originalWidth =
           _originalWidths[fieldId] ?? _fieldConfigs[fieldId]!.width;
-      _fieldConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
-        position: finalPosition,
-        width: originalWidth,
-      );
+      final originalPosition = _originalPositions[fieldId];
+      
+      // Check if dropping near original position (within 10% of container width)
+      final isNearOriginal = originalPosition != null && 
+          (finalPosition - originalPosition).distance < (_containerWidth * 0.1);
+      
+      if (isNearOriginal) {
+        // Restore to exact original position and width to prevent auto-expand issues
+        _fieldConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
+          position: originalPosition,
+          width: originalWidth,
+        );
+      } else {
+        // Use calculated position for new drops
+        _fieldConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
+          position: finalPosition,
+          width: originalWidth,
+        );
+      }
     });
 
     _pullUpFieldsToFillGaps();
