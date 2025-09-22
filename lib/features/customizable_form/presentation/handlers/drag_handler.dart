@@ -99,11 +99,11 @@ class DragHandler {
     // Drop zones in middle 60% of row based on horizontal position
     final x = position.dx;
     DropZone zone;
-    if (x < 0.33) {
+    if (x < 0.35) {           // Left zone: 0-35% (was 0-33%)
       zone = DropZone.leftDrop;
-    } else if (x < 0.67) {
+    } else if (x < 0.65) {    // Center zone: 35-65% (was 33-67%)
       zone = DropZone.centerDrop;
-    } else {
+    } else {                  // Right zone: 65-100% (was 67-100%)
       zone = DropZone.rightDrop;
     }
     
