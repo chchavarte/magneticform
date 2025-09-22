@@ -1,69 +1,137 @@
-# Flutter Magnetic Form Builder
+# 🧲 Magnetic Form Builder
 
 ![Flutter](https://img.shields.io/badge/Flutter-3.7.2+-blue.svg)
 ![Dart](https://img.shields.io/badge/Dart-3.0+-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/Platform-iOS%20%7C%20Android%20%7C%20Web%20%7C%20Desktop-lightgrey.svg)
-![Rating](https://img.shields.io/badge/Rating-9.2%2F10-brightgreen.svg)
+![Version](https://img.shields.io/badge/Version-1.0.1-brightgreen.svg)
 
-A sophisticated Flutter application featuring an advanced drag-and-drop form builder with magnetic grid positioning, intelligent field placement, and smooth animations.
+A sophisticated Flutter package for building **drag-and-drop forms** with magnetic grid positioning, intelligent field placement, and smooth animations.
 
-> **🏆 Rated 9.2/10** - Production-ready form builder with advanced UX patterns  
-> **🚀 v1.0.1** - Clean production builds with professional logging
+> **🏆 Production-Ready** - Clean logging and professional error handling  
+> **🚀 v1.0.1** - Optimized for production builds
 
 ## ✨ Features
 
-### 🎯 Core Functionality
-- **Magnetic Grid System**: 6-column responsive grid with precise field snapping
-- **Preview-on-Hover**: Real-time preview of field placement while dragging
-- **Intelligent Placement**: Auto-resize, push-down, and collision detection
-- **Smooth Animations**: Fluid transitions for preview, commit, and revert operations
-- **Haptic Feedback**: Enhanced user experience with tactile responses
+- 🎯 **Drag & Drop Interface** - Users can customize form layouts by dragging fields
+- 🧲 **Magnetic Grid System** - 6-column responsive grid with intelligent snapping
+- 🔄 **Real-time Preview** - See field placement before dropping
+- 🤖 **Auto-resize & Collision Detection** - Fields automatically adjust to fit available space
+- 📱 **Responsive Design** - Works on mobile, tablet, and desktop
+- 🎨 **Customizable Themes** - Full Material Design integration
+- ⚡ **Smooth Animations** - 60fps performance with optimized animations
+- 🧹 **Production-Ready Logging** - Clean console output with professional error reporting
 
-### 🏗️ Advanced Systems
-- **Field Collision Detection**: Prevents overlapping with smart positioning
-- **Auto-Resize Logic**: Automatically adjusts field widths to fit available space
-- **Push-Down Mechanism**: Rearranges fields when no space is available
-- **Multi-Animation Support**: Different animation curves for different operations
+## 🚀 Quick Start
 
-### 🎨 User Experience
-- **Real-time Visual Feedback**: See exactly where fields will be placed
-- **Responsive Design**: Adapts to different screen sizes
-- **Clean Architecture**: Feature-based organization for maintainability
-- **Production-Ready Logging**: Clean console output with professional error reporting
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Flutter SDK 3.7.2 or higher
-- Dart SDK compatible with Flutter version
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/chchavarte/magneticform.git
-   cd flutter-magnetic-form-builder
-   ```
-
-2. **Install dependencies**
-   ```bash
-   flutter pub get
-   ```
-
-3. **Run the app**
-   ```bash
-   flutter run
-   ```
-
-### Running Tests
-```bash
-flutter test
+### 1. Add to pubspec.yaml
+```yaml
+dependencies:
+  magnetic_form_builder:
+    git:
+      url: https://github.com/chchavarte/magneticform.git
+      ref: v1.0.1
 ```
 
-### 🔧 Configuration
+### 2. Import the package
+```dart
+import 'package:field_collision_test/features/customizable_form/presentation/screens/customizable_form_screen.dart';
+```
 
-#### Debug Logging (Optional)
+### 3. Create your first magnetic form
+```dart
+import 'package:flutter/material.dart';
+import 'package:field_collision_test/features/customizable_form/presentation/screens/customizable_form_screen.dart';
+import 'package:field_collision_test/features/customizable_form/data/models/field_config.dart';
+
+class MyFormScreen extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return CustomizableFormScreen(
+      defaultFieldConfigs: {
+        // Set initial positions and sizes
+        'field1': FieldConfig(
+          id: 'field1',
+          type: 'text',
+          label: 'Full Name',
+          position: Offset(0, 0),    // Top-left corner
+          width: 1.0,               // Full width (100%)
+        ),
+        'field2': FieldConfig(
+          id: 'field2',
+          type: 'email',
+          label: 'Email',
+          position: Offset(0, 70),   // Second row
+          width: 0.5,               // Half width (50%)
+        ),
+      },
+      storageKey: 'my_form_layout',
+    );
+  }
+}
+```
+
+That's it! 🎉 You now have a fully functional drag-and-drop form builder.
+
+## 🎯 Common Layout Patterns
+
+### Side-by-Side Fields (50/50)
+```dart
+defaultFieldConfigs: {
+  'firstName': FieldConfig(id: 'firstName', position: Offset(0, 0), width: 0.5),
+  'lastName': FieldConfig(id: 'lastName', position: Offset(0.5, 0), width: 0.5),
+}
+```
+
+### Three Columns (33/33/33)
+```dart
+defaultFieldConfigs: {
+  'day': FieldConfig(id: 'day', position: Offset(0, 0), width: 0.33),
+  'month': FieldConfig(id: 'month', position: Offset(0.33, 0), width: 0.33),
+  'year': FieldConfig(id: 'year', position: Offset(0.66, 0), width: 0.33),
+}
+```
+
+### Full Width Header + Two Columns
+```dart
+defaultFieldConfigs: {
+  'title': FieldConfig(id: 'title', position: Offset(0, 0), width: 1.0),
+  'address1': FieldConfig(id: 'address1', position: Offset(0, 70), width: 0.5),
+  'address2': FieldConfig(id: 'address2', position: Offset(0.5, 70), width: 0.5),
+}
+```
+
+## 📐 Understanding the Grid System
+
+The Magnetic Form Builder uses a 6-column responsive grid:
+
+**Position:** `Offset(x, y)` where:
+- `x`: Horizontal position (0.0 = left edge, 1.0 = right edge)
+- `y`: Vertical position (0 = top, increments by row height ~70px)
+
+**Width:** Percentage of container width (0.0 to 1.0)
+- `1.0` = Full width (100%)
+- `0.5` = Half width (50%)
+- `0.33` = One third (33%)
+
+### Visual Grid Reference
+```
+┌─────────────────────────────────────────┐
+│ 0.0    0.17   0.33   0.5    0.67   0.83 │ 1.0
+├─────────────────────────────────────────┤
+│ [    Field 1 (width: 1.0)             ] │ Row 0 (y: 0)
+├─────────────────────────────────────────┤
+│ [ Field 2 ] │ [ Field 3 ] │ [ Field 4 ] │ Row 1 (y: 70)
+│ (width:0.33)│ (width:0.33)│ (width:0.33)│
+├─────────────────────────────────────────┤
+│ [    Field 5 (width: 0.5)  ] │ Field 6 │ Row 2 (y: 140)
+│                              │(w: 0.5) │
+└─────────────────────────────────────────┘
+```
+
+## 🔧 Configuration
+
+### Debug Logging (Optional)
 By default, debug logging is disabled for clean production builds. To enable debug output during development:
 
 ```dart
@@ -76,113 +144,15 @@ void main() {
 }
 ```
 
-#### Production Builds
-The app is optimized for production with:
-- ✅ No debug console output
+### Production Benefits
+The package is optimized for production with:
+- ✅ No debug console output by default
 - ✅ Clean error reporting via `Logger.error()`
 - ✅ Optimized performance without debug overhead
 
-## 🏛️ Architecture
+## � Migration from v1.0.0
 
-The app follows Clean Architecture principles with feature-based organization:
-
-```
-lib/
-├── core/                     # Core app functionality
-│   ├── constants/           # Animation, app, field, and grid constants
-│   ├── theme/              # App theming and styling
-│   └── utils/              # Utilities (logger, decorations)
-├── features/
-│   └── customizable_form/  # Main form builder feature
-│       ├── data/           # Models and repositories
-│       ├── domain/         # Business logic (entities, use cases)
-│       └── presentation/   # UI components, handlers, and systems
-├── shared/                 # Shared widgets and extensions
-└── demo/                   # Demo data and test builders
-```
-
-## 🔧 Key Components
-
-### Magnetic Card System
-- **Grid-based positioning** with 6-column layout
-- **Automatic snapping** to grid positions
-- **Collision detection** and avoidance
-- **Multiple field widths**: 33%, 50%, 67%, 100%
-
-### Field Preview System
-- **Real-time preview** during drag operations
-- **Three placement strategies**:
-  1. Auto-resize to fit available space
-  2. Direct placement at current width
-  3. Push-down rearrangement
-
-### Animation System
-- **Preview animations** (150ms) for quick feedback
-- **Commit animations** (300ms) for smooth transitions
-- **Revert animations** (200ms) for quick cancellation
-
-## 🎮 Usage
-
-1. **Drag Fields**: Long press and drag any form field
-2. **Preview Placement**: See real-time preview of where the field will be placed
-3. **Auto-Resize**: Fields automatically resize to fit available space when possible
-4. **Push-Down**: When no space is available, other fields are pushed down
-5. **Smooth Animations**: All movements are animated for better UX
-
-## 🧪 Testing
-
-The app includes comprehensive tests for:
-- Field preview system logic
-- Collision detection algorithms
-- Animation state management
-- Grid positioning calculations
-
-Run tests with:
-```bash
-flutter test test/field_preview_system_test.dart
-```
-
-## 📱 Supported Platforms
-
-- ✅ iOS
-- ✅ Android
-- ✅ Web
-- ✅ macOS
-- ✅ Windows
-- ✅ Linux
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- Flutter team for the amazing framework
-- Community contributors for inspiration and feedback
-
-## 🎥 Demo
-
-Want to see it in action? Check out the [Demo Guide](DEMO_GUIDE.md) for a comprehensive walkthrough of all features.
-
-### Quick Start Demo
-```bash
-git clone https://github.com/chchavarte/magneticform.git
-cd flutter-magnetic-form-builder
-flutter pub get
-flutter run
-```
-
-## �  Migration from v1.0.0
-
-### Production-Ready Improvements
+### Changes in v1.0.1
 
 Version 1.0.1 focuses on production readiness:
 
@@ -198,35 +168,109 @@ Logger.setDebugMode(true);
 #### Internal Code Cleanup
 - Removed debug print statements from production code
 - Streamlined internal implementation
-- Improved performance by reducing debug overhead
 
-**✅ All public APIs remain unchanged** - all widget interfaces, controllers, and data models work exactly the same.
+**✅ Public APIs remain unchanged** - all widget interfaces, controllers, and data models work exactly the same.
+
+## 🎯 Use Cases
+
+**Perfect For:**
+- Admin Dashboards - Let users customize data entry forms
+- Survey Builders - Drag-and-drop survey creation
+- CRM Systems - Customizable contact forms
+- Report Builders - Dynamic form layouts
+- Settings Screens - User-configurable interfaces
+
+**Not Ideal For:**
+- Simple static forms (use regular Flutter forms)
+- Forms that never need layout changes
+- Performance-critical applications with 100+ fields
+
+## 🚀 Performance Tips
+
+- **Limit Field Count**: Best performance with < 50 fields
+- **Use RepaintBoundary**: Wrap expensive field widgets
+- **Disable Animations**: Set `AnimationConstants.previewDuration = Duration.zero` for testing
+- **Optimize Builders**: Keep field builders lightweight
+
+## 📚 API Reference
+
+### CustomizableFormScreen
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `defaultFieldConfigs` | `Map<String, FieldConfig>` | ✅ | Initial positions and sizes |
+| `storageKey` | `String?` | ❌ | Key for persisting layout changes |
+
+### FieldConfig
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | `String` | ✅ | Unique identifier for the field |
+| `type` | `String` | ✅ | Field type (text, email, etc.) |
+| `label` | `String` | ✅ | Display name for the field |
+| `position` | `Offset` | ✅ | Position on grid (x: 0.0-1.0, y: 0+) |
+| `width` | `double` | ✅ | Width as percentage (0.0-1.0) |
+| `isVisible` | `bool` | ❌ | Whether field is shown (default: true) |
+
+## 🏛️ Architecture
+
+The package follows Clean Architecture principles with feature-based organization:
+
+```
+lib/
+├── core/                     # Core functionality
+│   ├── constants/           # Animation, app, field, and grid constants
+│   ├── theme/              # App theming and styling
+│   └── utils/              # Utilities (logger, decorations)
+├── features/
+│   └── customizable_form/  # Main form builder feature
+│       ├── data/           # Models and repositories
+│       └── presentation/   # UI components, handlers, and systems
+└── demo/                   # Demo data and test builders
+```
+
+## 🧪 Testing
+
+Run tests with:
+```bash
+flutter test
+```
+
+The package includes comprehensive tests for:
+- Field preview system logic
+- Collision detection algorithms
+- Animation state management
+- Grid positioning calculations
+
+## 📱 Supported Platforms
+
+- ✅ iOS
+- ✅ Android
+- ✅ Web
+- ✅ macOS
+- ✅ Windows
+- ✅ Linux
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 📚 Documentation
 
-- **[API Documentation](API_DOCUMENTATION.md)** - Complete API reference
-- **[Architecture Guide](FOLDER_STRUCTURE.md)** - Project structure and organization  
-- **[Preview System](PREVIEW_SYSTEM_SUMMARY.md)** - Implementation details
-- **[Contributing Guide](CONTRIBUTING.md)** - How to contribute
-- **[Demo Guide](DEMO_GUIDE.md)** - Feature showcase guide
+- **[API Compatibility](API_COMPATIBILITY.md)** - Version compatibility matrix
+- **[Migration Guide](MIGRATION_GUIDE.md)** - Upgrade instructions between versions
 - **[Changelog](CHANGELOG.md)** - Version history
 
-
-## 📊 Project Stats
-
-- **Lines of Code**: ~4,000+
-- **Test Coverage**: Comprehensive preview system tests
-- **Dependencies**: Zero external dependencies (pure Flutter)
-- **Platforms**: 6 (iOS, Android, Web, macOS, Windows, Linux)
-- **Architecture**: Clean Architecture with feature-based organization
-
-## 📞 Support
+## 🆘 Support
 
 If you have any questions or need help, please:
-- 🐛 [Open an issue](https://github.com/yourusername/flutter-magnetic-form-builder/issues) for bugs
-- 💡 [Start a discussion](https://github.com/yourusername/flutter-magnetic-form-builder/discussions) for questions
-- 📖 Check the comprehensive [documentation](API_DOCUMENTATION.md)
-- 🎥 Follow the [demo guide](DEMO_GUIDE.md) for feature walkthrough
+- 🐛 [Open an issue](https://github.com/chchavarte/magneticform/issues) for bugs
+- 💡 [Start a discussion](https://github.com/chchavarte/magneticform/discussions) for questions
+- 📖 Check the comprehensive documentation
 
 ## ⭐ Show Your Support
 
@@ -238,4 +282,4 @@ If this project helped you, please consider:
 
 ---
 
-**Built with ❤️ using Flutter** | **Rating: 9.2/10 ⭐**
+**Built with ❤️ using Flutter** | **v1.0.1 - Production Ready** 🚀
