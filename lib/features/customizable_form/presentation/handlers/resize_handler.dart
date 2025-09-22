@@ -165,30 +165,18 @@ class FieldResizeHandler {
     required double currentX,
     required double containerWidth,
   }) {
+    final rightEdge = currentX + currentWidth; // Fixed anchor point
+    
     if (accumulatedDrag < 0 &&
         currentIndex < MagneticCardSystem.cardWidths.length - 1) {
-      // Expanding left
-      final candidateWidth = MagneticCardSystem.cardWidths[currentIndex + 1];
-      final candidateX = (currentX - (candidateWidth - currentWidth)).clamp(
-        0.0,
-        1.0,
-      );
-      final candidateStartColumn = MagneticCardSystem.getColumnFromPosition(
-        candidateX,
-        containerWidth,
-      );
-      final candidateSpan = MagneticCardSystem.getActualColumnSpan(
-        candidateWidth,
-        candidateStartColumn,
-      );
-
-      final actualWidth =
-          candidateSpan / 6.0; // Convert span to width percentage
-      return (width: actualWidth, x: candidateX);
+      // Expanding left - keep right edge fixed
+      final newWidth = MagneticCardSystem.cardWidths[currentIndex + 1];
+      final newX = (rightEdge - newWidth).clamp(0.0, 1.0);
+      return (width: newWidth, x: newX);
     } else if (accumulatedDrag > 0 && currentIndex > 0) {
-      // Shrinking from left
+      // Shrinking from left - keep right edge fixed  
       final newWidth = MagneticCardSystem.cardWidths[currentIndex - 1];
-      final newX = currentX + (currentWidth - newWidth);
+      final newX = rightEdge - newWidth;
       return (width: newWidth, x: newX);
     }
 
@@ -203,6 +191,7 @@ class FieldResizeHandler {
     required Function(String, FieldConfig) onFieldUpdate,
     required VoidCallback onSave,
     required TickerProvider vsync,
+    required ResizeDirection direction, // Add this parameter
   }) {
     Logger.resize('Called for field $fieldId');
     final currentConfig = fieldConfigs[fieldId];
@@ -227,6 +216,7 @@ class FieldResizeHandler {
         fieldConfigs: fieldConfigs,
         containerWidth: containerWidth,
         fieldId: fieldId,
+        direction: direction, // Pass direction
       );
 
       Logger.resize('Valid config found: ${validConfig?.width}, ${validConfig?.position}');
@@ -257,15 +247,29 @@ class FieldResizeHandler {
     required Map<String, FieldConfig> fieldConfigs,
     required double containerWidth,
     required String fieldId,
+    ResizeDirection? direction, // Add this parameter
   }) {
-    // Only try smaller widths at the SAME position - never move the field
+    // For left resize, keep right edge fixed; for right resize, keep left edge fixed
+    final rightEdge = direction == ResizeDirection.left 
+        ? currentConfig.position.dx + currentConfig.width
+        : null;
+    
     final currentIndex = MagneticCardSystem.cardWidths.indexOf(
       currentConfig.width,
     );
 
     for (int i = currentIndex - 1; i >= 0; i--) {
       final testWidth = MagneticCardSystem.cardWidths[i];
-      final testConfig = currentConfig.copyWith(width: testWidth);
+      
+      // Calculate position based on resize direction
+      final testX = direction == ResizeDirection.left 
+          ? rightEdge! - testWidth  // Keep right edge fixed
+          : currentConfig.position.dx; // Keep left edge fixed
+      
+      final testConfig = currentConfig.copyWith(
+        width: testWidth,
+        position: Offset(testX, currentConfig.position.dy),
+      );
 
       final wouldOverlap = GridUtils.wouldFieldOverlap(
         testConfig,
@@ -280,7 +284,7 @@ class FieldResizeHandler {
       }
     }
 
-    // If no valid width found at current position, revert to original config
+    // If no valid width found, revert to original config
     Logger.resize('No valid width found, reverting to original config');
     final originalConfig = _originalConfigs[fieldId];
     if (originalConfig != null) {

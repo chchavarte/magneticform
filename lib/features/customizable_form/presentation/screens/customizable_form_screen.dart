@@ -1083,6 +1083,7 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
       fieldConfigs: _fieldConfigs,
       containerWidth: _containerWidth,
       vsync: this,
+      direction: direction, // Add this line
       onFieldUpdate: (id, config) {
         setState(() {
           _fieldConfigs[id] = config;
