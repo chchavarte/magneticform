@@ -1042,6 +1042,7 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
     });
 
     _pullUpFieldsToFillGaps();
+    _autoExpandToFillGaps();
     _saveFieldConfigurations();
   }
 
