@@ -159,12 +159,24 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
         } else {
           _fieldConfigs = Map.from(widget.defaultFieldConfigs);
         }
+        
+        // Debug field2 initial position
+        if (_fieldConfigs.containsKey('field2')) {
+          print('FIELD2 DEBUG: Initial position after load: ${_fieldConfigs['field2']!.position}');
+        }
+        
         _isLoading = false;
       });
     } catch (e) {
       // If loading fails, use default configurations
       setState(() {
         _fieldConfigs = Map.from(widget.defaultFieldConfigs);
+        
+        // Debug field2 initial position on error
+        if (_fieldConfigs.containsKey('field2')) {
+          print('FIELD2 DEBUG: Initial position after error fallback: ${_fieldConfigs['field2']!.position}');
+        }
+        
         _isLoading = false;
       });
     }
@@ -376,16 +388,28 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
 
   // Auto-expand fields to fill remaining gaps after drag operations
   void _autoExpandToFillGaps() {
+    print('AUTO-EXPAND DEBUG: _autoExpandToFillGaps called');
     AutoExpandHandler.autoExpandToFillGaps(
       fieldConfigs: _fieldConfigs,
       vsync: this,
       onUpdate: (configs) {
+        print('AUTO-EXPAND DEBUG: onUpdate called with ${configs.length} configs');
+        
+        // Debug field2 changes in auto-expand
+        if (configs.containsKey('field2')) {
+          final oldField2 = _fieldConfigs['field2'];
+          final newField2 = configs['field2'];
+          if (oldField2 != null && newField2 != null) {
+            print('FIELD2 DEBUG: Auto-expand changing position from ${oldField2.position} to ${newField2.position}');
+          }
+        }
+        
         setState(() {
           _fieldConfigs = configs;
         });
       },
       onComplete: () {
-        // Auto-expansion complete
+        print('AUTO-EXPAND DEBUG: Auto-expansion complete');
       },
     );
   }
@@ -530,6 +554,7 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
   }
 
   void _startFieldDrag(String fieldId, LongPressStartDetails details) {
+    // Create initial drag state with original position
     _dragState = DragHandler.startFieldDrag(
       fieldId: fieldId,
       details: details,
@@ -557,10 +582,30 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
       final idealX = cursorX - newWidth / 2;
       final magneticX = _applySubtleMagnetism(idealX);
       final newX = magneticX.clamp(0.0, 1.0 - newWidth); // Center under cursor with magnetism
+      
+      // Debug logging to trace leftward movement
+      print('LONG PRESS DEBUG: cursorX=$cursorX, idealX=$idealX, magneticX=$magneticX, newX=$newX, originalPos=${_fieldConfigs[fieldId]!.position.dx}');
+      
+      // Specific debugging for field2
+      if (fieldId == 'field2') {
+        print('FIELD2 DEBUG: Long press start - original position: ${_fieldConfigs[fieldId]!.position}, width: ${_fieldConfigs[fieldId]!.width}');
+      }
 
-      _fieldConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
+      final newConfig = _fieldConfigs[fieldId]!.copyWith(
         width: newWidth,
         position: Offset(newX, _fieldConfigs[fieldId]!.position.dy),
+      );
+      
+      // Debug field2 position changes
+      if (fieldId == 'field2') {
+        print('FIELD2 DEBUG: Position changed from ${_fieldConfigs[fieldId]!.position} to ${newConfig.position}');
+      }
+      
+      _fieldConfigs[fieldId] = newConfig;
+      
+      // Update drag state with cursor-centered position
+      _dragState = _dragState!.copyWith(
+        dragStartFieldPosition: newConfig.position,
       );
     });
   }
@@ -584,10 +629,18 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
     // Update field position for visual feedback
     setState(() {
       final currentWidth = _fieldConfigs[fieldId]!.width;
+      final oldPosition = _fieldConfigs[fieldId]!.position;
+      
       _fieldConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
         position: result.newPosition,
         width: currentWidth,
       );
+      
+      // Debug field2 movement during drag
+      if (fieldId == 'field2') {
+        print('FIELD2 DEBUG: Drag movement - from $oldPosition to ${result.newPosition}');
+      }
+      
       _hoveredColumn = result.hoveredColumn;
       _hoveredRow = result.hoveredRow;
     });
@@ -1110,6 +1163,7 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
       onComplete: () {
         _pullUpFieldsToFillGaps();
         // Auto-expand fields to fill remaining gaps
+        print('AUTO-EXPAND DEBUG: Calling _autoExpandToFillGaps from _commitPreview');
         _autoExpandToFillGaps();
         _saveFieldConfigurations();
       },
@@ -1144,6 +1198,7 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
     });
 
     _pullUpFieldsToFillGaps();
+    print('AUTO-EXPAND DEBUG: Calling _autoExpandToFillGaps from _handleStandardDragEnd');
     _autoExpandToFillGaps();
     _saveFieldConfigurations();
   }
