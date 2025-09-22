@@ -50,9 +50,7 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
   // Drag state
   DragState? _dragState;
 
-  // Hover state for push down logic
-  int? _hoveredColumn;
-  int? _hoveredRow;
+
 
   // Hover timer for 0.3s delay
   Timer? _hoverTimer;
@@ -88,21 +86,21 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
   // Apply subtle magnetic pull to guide field positioning
   double _applySubtleMagnetism(double idealX) {
     const magnetStrength = 0.015; // Very subtle pull (1.5%)
-    
+
     // Center magnetic zone: 40-55% → pull toward 47.5% (center of dropzone)
     if (idealX >= 0.40 && idealX <= 0.55) {
       final centerTarget = 0.475; // Center of center dropzone
       final pullDirection = centerTarget - idealX;
       return idealX + (pullDirection * magnetStrength);
     }
-    
-    // Right magnetic zone: 70-100% → pull toward 82.5% (center of right dropzone)  
+
+    // Right magnetic zone: 70-100% → pull toward 82.5% (center of right dropzone)
     if (idealX >= 0.70 && idealX <= 1.0) {
       final rightTarget = 0.825; // Center of right dropzone
       final pullDirection = rightTarget - idealX;
       return idealX + (pullDirection * magnetStrength);
     }
-    
+
     // No magnetism in left zone (0-40%) - let clamping work naturally
     return idealX;
   }
@@ -159,24 +157,14 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
         } else {
           _fieldConfigs = Map.from(widget.defaultFieldConfigs);
         }
-        
-        // Debug field2 initial position
-        if (_fieldConfigs.containsKey('field2')) {
-          print('FIELD2 DEBUG: Initial position after load: ${_fieldConfigs['field2']!.position}');
-        }
-        
+
         _isLoading = false;
       });
     } catch (e) {
       // If loading fails, use default configurations
       setState(() {
         _fieldConfigs = Map.from(widget.defaultFieldConfigs);
-        
-        // Debug field2 initial position on error
-        if (_fieldConfigs.containsKey('field2')) {
-          print('FIELD2 DEBUG: Initial position after error fallback: ${_fieldConfigs['field2']!.position}');
-        }
-        
+
         _isLoading = false;
       });
     }
@@ -186,162 +174,15 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
     try {
       await _repository.saveConfigurations(widget.storageKey, _fieldConfigs);
     } catch (e) {
-      // Handle save error if needed
       Logger.error('Error saving field configurations: $e');
     }
   }
 
-  // Restore original positions of temporarily moved fields
-  void _restoreOriginalPositions() {
-    // Restore all temporarily moved fields to their original positions
-    for (final fieldId in _temporarilyMovedFields) {
-      if (_originalPositions.containsKey(fieldId)) {
-        setState(() {
-          // Preserve current width when restoring position
-          final currentWidth = _fieldConfigs[fieldId]!.width;
-          _fieldConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
-            position: _originalPositions[fieldId]!,
-            width: currentWidth, // Keep any width changes that were made
-          );
-        });
-      }
-    }
-    _temporarilyMovedFields.clear();
-  }
 
-  // Check if there's space available in a row for a field
-  bool _hasSpaceInRow(int targetRow, String excludeFieldId, double fieldWidth) {
-    return GridUtils.canFieldFitInRow(
-      targetRow,
-      fieldWidth,
-      _fieldConfigs,
-      _containerWidth,
-      excludeFieldId: excludeFieldId,
-    );
-  }
 
-  // Push down logic - main entry point
-  void _pushDownAllFieldsAtRow(int targetRow, String excludeFieldId) {
-    // First, restore any previously moved fields
-    _restoreOriginalPositions();
 
-    final currentWidth = _fieldConfigs[excludeFieldId]!.width;
 
-    // Check if there's space available in the target row
-    if (_hasSpaceInRow(targetRow, excludeFieldId, currentWidth)) {
-      // There's space - find the exact position in the target row
-      final containerWidth = _containerWidth;
-      final columnSpan = MagneticCardSystem.getColumnsFromWidth(currentWidth);
 
-      Offset? foundPosition;
-
-      // Try each possible starting column in the target row only (6-column grid)
-      Logger.debug(
-        'Testing positions for field $excludeFieldId in row $targetRow, columnSpan: $columnSpan',
-      );
-      for (int startCol = 0; startCol <= 6 - columnSpan; startCol++) {
-        final testPosition = Offset(
-          MagneticCardSystem.getColumnPositionNormalized(startCol),
-          targetRow * MagneticCardSystem.cardHeight,
-        );
-
-        Logger.debug('Testing column $startCol, position: ${testPosition.dx}');
-
-        final hasOverlap = MagneticCardSystem.wouldOverlap(
-          testPosition,
-          currentWidth,
-          containerWidth,
-          _fieldConfigs,
-          excludeFieldId,
-        );
-
-        Logger.debug('Column $startCol overlap: $hasOverlap');
-
-        if (!hasOverlap) {
-          foundPosition = testPosition;
-          Logger.debug('Found position at column $startCol');
-          break; // Use the first available position
-        }
-      }
-
-      if (foundPosition != null) {
-        setState(() {
-          _fieldConfigs[excludeFieldId] = _fieldConfigs[excludeFieldId]!
-              .copyWith(position: foundPosition);
-          _temporarilyMovedFields.add(excludeFieldId);
-
-          // DO NOT end drag here - let user continue dragging
-          // The drag should only end when user releases their hold
-        });
-
-        // Show auto-fit feedback
-        _showAutoResizeMessage(
-          'Auto-fitted $excludeFieldId to available position (${(currentWidth * 100).toInt()}% width)',
-        );
-      } else {
-        // This shouldn't happen if _hasSpaceInRow returned true, but fallback to rearrange
-        _rearrangeFieldsWithPullUp(targetRow, excludeFieldId);
-      }
-    } else {
-      // No space - use rearrangement logic
-      _rearrangeFieldsWithPullUp(targetRow, excludeFieldId);
-    }
-  }
-
-  void _rearrangeFieldsWithPullUp(int targetRow, String excludeFieldId) {
-    final draggedFieldOriginalRow = MagneticCardSystem.getRowFromPosition(
-      _originalPositions[excludeFieldId]!.dy,
-    );
-
-    // Get ALL fields except the dragged one
-    final allOtherFields = <String, Offset>{};
-    for (final entry in _originalPositions.entries) {
-      final fieldId = entry.key;
-      if (fieldId == excludeFieldId) continue;
-      allOtherFields[fieldId] = entry.value;
-    }
-
-    // Group fields by their original row
-    final fieldsByRow = <int, List<MapEntry<String, Offset>>>{};
-    for (final entry in allOtherFields.entries) {
-      final originalRow = MagneticCardSystem.getRowFromPosition(entry.value.dy);
-      fieldsByRow.putIfAbsent(originalRow, () => []).add(entry);
-    }
-
-    // Sort rows to maintain order
-    final sortedRows = fieldsByRow.keys.toList()..sort();
-
-    // Compact all fields and reserve space for target row
-    int nextAvailableRow = 0;
-
-    for (final originalRow in sortedRows) {
-      final fieldsInRow = fieldsByRow[originalRow]!;
-
-      // Skip the target row - reserve it for the dragged field
-      if (nextAvailableRow == targetRow) {
-        nextAvailableRow++;
-      }
-
-      for (final entry in fieldsInRow) {
-        final fieldId = entry.key;
-        final originalPosition = entry.value;
-
-        final newPosition = Offset(
-          originalPosition.dx,
-          nextAvailableRow * MagneticCardSystem.cardHeight,
-        );
-
-        setState(() {
-          _fieldConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
-            position: newPosition,
-          );
-          _temporarilyMovedFields.add(fieldId);
-        });
-      }
-
-      nextAvailableRow++; // Move to next available row
-    }
-  }
 
   // Pull up fields to fill gaps after drag operations
   void _pullUpFieldsToFillGaps() {
@@ -388,29 +229,15 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
 
   // Auto-expand fields to fill remaining gaps after drag operations
   void _autoExpandToFillGaps() {
-    print('AUTO-EXPAND DEBUG: _autoExpandToFillGaps called');
     AutoExpandHandler.autoExpandToFillGaps(
       fieldConfigs: _fieldConfigs,
       vsync: this,
       onUpdate: (configs) {
-        print('AUTO-EXPAND DEBUG: onUpdate called with ${configs.length} configs');
-        
-        // Debug field2 changes in auto-expand
-        if (configs.containsKey('field2')) {
-          final oldField2 = _fieldConfigs['field2'];
-          final newField2 = configs['field2'];
-          if (oldField2 != null && newField2 != null) {
-            print('FIELD2 DEBUG: Auto-expand changing position from ${oldField2.position} to ${newField2.position}');
-          }
-        }
-        
         setState(() {
           _fieldConfigs = configs;
         });
       },
-      onComplete: () {
-        print('AUTO-EXPAND DEBUG: Auto-expansion complete');
-      },
+      onComplete: () {},
     );
   }
 
@@ -540,7 +367,7 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
       config: config,
       isCustomizationMode: _isCustomizationMode,
       isSelected: isSelected,
-      isDragged: isDragged ?? false,
+      isDragged: isDragged,
       isInPreview: isInPreview,
       containerWidth: _containerWidth,
       onTap: _selectField,
@@ -581,28 +408,18 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
       // Apply subtle magnetic pull in specific zones
       final idealX = cursorX - newWidth / 2;
       final magneticX = _applySubtleMagnetism(idealX);
-      final newX = magneticX.clamp(0.0, 1.0 - newWidth); // Center under cursor with magnetism
-      
-      // Debug logging to trace leftward movement
-      print('LONG PRESS DEBUG: cursorX=$cursorX, idealX=$idealX, magneticX=$magneticX, newX=$newX, originalPos=${_fieldConfigs[fieldId]!.position.dx}');
-      
-      // Specific debugging for field2
-      if (fieldId == 'field2') {
-        print('FIELD2 DEBUG: Long press start - original position: ${_fieldConfigs[fieldId]!.position}, width: ${_fieldConfigs[fieldId]!.width}');
-      }
+      final newX = magneticX.clamp(
+        0.0,
+        1.0 - newWidth,
+      ); // Center under cursor with magnetism
 
       final newConfig = _fieldConfigs[fieldId]!.copyWith(
         width: newWidth,
         position: Offset(newX, _fieldConfigs[fieldId]!.position.dy),
       );
-      
-      // Debug field2 position changes
-      if (fieldId == 'field2') {
-        print('FIELD2 DEBUG: Position changed from ${_fieldConfigs[fieldId]!.position} to ${newConfig.position}');
-      }
-      
+
       _fieldConfigs[fieldId] = newConfig;
-      
+
       // Update drag state with cursor-centered position
       _dragState = _dragState!.copyWith(
         dragStartFieldPosition: newConfig.position,
@@ -629,29 +446,20 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
     // Update field position for visual feedback
     setState(() {
       final currentWidth = _fieldConfigs[fieldId]!.width;
-      final oldPosition = _fieldConfigs[fieldId]!.position;
-      
+
       _fieldConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
         position: result.newPosition,
         width: currentWidth,
       );
-      
-      // Debug field2 movement during drag
-      if (fieldId == 'field2') {
-        print('FIELD2 DEBUG: Drag movement - from $oldPosition to ${result.newPosition}');
-      }
-      
-      _hoveredColumn = result.hoveredColumn;
-      _hoveredRow = result.hoveredRow;
+
+
     });
 
-    // Handle preview logic if we've moved beyond threshold
     if (result.shouldShowPreview) {
       _handlePreviewLogic(fieldId, result.hoveredRow);
     }
   }
 
-  // Handle preview logic with zone-based approach and 0.3s delay
   void _handlePreviewLogic(String fieldId, int hoveredRow) {
     if (_dragState == null) return;
 
@@ -677,7 +485,6 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
     }
   }
 
-  // Handle drop based on zone
   void _handleZoneDrop(String fieldId, int targetRow, DropZone zone) {
     switch (zone) {
       case DropZone.leftDrop:
@@ -695,20 +502,14 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
     }
   }
 
-  // Handle right-side drop (move dragged field to rightmost, shift others left)
   void _handleRightDrop(String fieldId, int targetRow) {
     final fieldsInRow = _getFieldsInRow(targetRow, excludeFieldId: fieldId);
 
     // Check if we can accommodate the field (max 3 fields total)
     if (fieldsInRow.length >= 3) {
-      Logger.preview('Row $targetRow full, falling back to push-down');
       _handlePushDown(fieldId, targetRow);
       return;
     }
-
-    Logger.preview(
-      'Right drop: field $fieldId targeting row $targetRow with ${fieldsInRow.length} existing fields',
-    );
 
     final totalFields = fieldsInRow.length + 1;
     final fieldWidth = 1.0 / totalFields;
@@ -756,19 +557,13 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
     );
   }
 
-  // Handle left-side drop (move dragged field to leftmost, shift others right)
   void _handleLeftDrop(String fieldId, int targetRow) {
     final fieldsInRow = _getFieldsInRow(targetRow, excludeFieldId: fieldId);
 
     if (fieldsInRow.length >= 3) {
-      Logger.preview('Row $targetRow full, falling back to push-down');
       _handlePushDown(fieldId, targetRow);
       return;
     }
-
-    Logger.preview(
-      'Left drop: field $fieldId targeting row $targetRow with ${fieldsInRow.length} existing fields',
-    );
 
     final totalFields = fieldsInRow.length + 1;
     final fieldWidth = 1.0 / totalFields;
@@ -813,19 +608,13 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
     );
   }
 
-  // Handle center drop (split fields)
   void _handleCenterDrop(String fieldId, int targetRow) {
     final fieldsInRow = _getFieldsInRow(targetRow, excludeFieldId: fieldId);
 
     if (fieldsInRow.length >= 3) {
-      Logger.preview('Row $targetRow full, falling back to push-down');
       _handlePushDown(fieldId, targetRow);
       return;
     }
-
-    Logger.preview(
-      'Center drop: field $fieldId targeting row $targetRow with ${fieldsInRow.length} existing fields',
-    );
 
     final totalFields = fieldsInRow.length + 1;
     final fieldWidth = 1.0 / totalFields;
@@ -889,9 +678,7 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
     );
   }
 
-  // Handle push down (use existing logic)
   void _handlePushDown(String fieldId, int targetRow) {
-    Logger.preview('Push down: field $fieldId to row $targetRow');
     _showPreview(fieldId, targetRow);
   }
 
@@ -969,9 +756,7 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
     _showAutoResizeMessage(message);
   }
 
-  // Show preview positions (existing push-down logic)
   void _showPreview(String fieldId, int targetRow) {
-    Logger.preview('Field $fieldId targeting row $targetRow');
     GridUtils.printFieldConfigs(
       'Current field configs before preview:',
       _fieldConfigs,
@@ -983,7 +768,6 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
             ? _previewState.originalConfigs
             : Map<String, FieldConfig>.from(_fieldConfigs);
 
-    Logger.debug('Calling FieldPreviewSystem.calculatePreviewPositions...');
     final previewConfigs = FieldPreviewSystem.calculatePreviewPositions(
       targetRow: targetRow,
       draggedFieldId: fieldId,
@@ -991,15 +775,12 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
       containerWidth: _containerWidth,
     );
 
-    Logger.debug('Calling FieldPreviewSystem.getPreviewInfo...');
     final previewInfo = FieldPreviewSystem.getPreviewInfo(
       targetRow: targetRow,
       draggedFieldId: fieldId,
       currentConfigs: originalConfigs,
       containerWidth: _containerWidth,
     );
-
-    Logger.preview('Preview result: ${previewInfo.message}');
     GridUtils.printFieldConfigs(
       'Preview configs returned:',
       previewConfigs,
@@ -1052,7 +833,6 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
       // Commit zone preview
       _commitZonePreview(fieldId);
     } else {
-      // Handle standard drag end
       final result = DragHandler.handleFieldDragEnd(
         fieldId: fieldId,
         fieldConfigs: _fieldConfigs,
@@ -1072,8 +852,6 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
     _clearZonePreview();
     setState(() {
       _dragState = null;
-      _hoveredColumn = null;
-      _hoveredRow = null;
       _lastHoveredRow = null;
       _lastHoveredZone = null;
       _originalPositions.clear();
@@ -1086,8 +864,6 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
 
   // Commit zone preview positions
   void _commitZonePreview(String fieldId) {
-    Logger.success('Committing zone preview for field $fieldId');
-
     // Animate from current positions to preview positions
     FieldPreviewSystem.animateToCommit(
       vsync: this,
@@ -1114,16 +890,11 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
 
   // Commit preview positions with animation
   void _commitPreview(String fieldId) {
-    Logger.success('COMMIT PREVIEW: Field $fieldId');
     if (!_previewState.isActive ||
         _previewState.previewInfo?.targetPosition == null) {
-      Logger.info('No active preview, using standard drag end');
       _handleStandardDragEnd(fieldId, _fieldConfigs[fieldId]!.position);
       return;
     }
-
-    Logger.info('Committing preview positions...');
-    Logger.info('Preview info: ${_previewState.previewInfo!.message}');
 
     // Create final configs with the dragged field at the preview position
     final finalConfigs = Map<String, FieldConfig>.from(
@@ -1133,12 +904,8 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
     // Check if the preview included a width change for the dragged field
     final previewDraggedField = _previewState.previewConfigs[fieldId];
     if (previewDraggedField != null) {
-      Logger.info(
-        'Using preview config for $fieldId: width ${(previewDraggedField.width * 100).toInt()}%, position ${previewDraggedField.position}',
-      );
       finalConfigs[fieldId] = previewDraggedField;
     } else {
-      Logger.info('No preview config found, using target position only');
       finalConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
         position: _previewState.previewInfo!.targetPosition!,
       );
@@ -1163,25 +930,25 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
       onComplete: () {
         _pullUpFieldsToFillGaps();
         // Auto-expand fields to fill remaining gaps
-        print('AUTO-EXPAND DEBUG: Calling _autoExpandToFillGaps from _commitPreview');
+
         _autoExpandToFillGaps();
         _saveFieldConfigurations();
       },
     );
   }
 
-  // Handle standard drag end without preview
   void _handleStandardDragEnd(String fieldId, Offset finalPosition) {
     setState(() {
       // Restore original width when drag ends
       final originalWidth =
           _originalWidths[fieldId] ?? _fieldConfigs[fieldId]!.width;
       final originalPosition = _originalPositions[fieldId];
-      
+
       // Check if dropping near original position (within 10% of container width)
-      final isNearOriginal = originalPosition != null && 
+      final isNearOriginal =
+          originalPosition != null &&
           (finalPosition - originalPosition).distance < (_containerWidth * 0.1);
-      
+
       if (isNearOriginal) {
         // Restore to exact original position and width to prevent auto-expand issues
         _fieldConfigs[fieldId] = _fieldConfigs[fieldId]!.copyWith(
@@ -1198,7 +965,7 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
     });
 
     _pullUpFieldsToFillGaps();
-    print('AUTO-EXPAND DEBUG: Calling _autoExpandToFillGaps from _handleStandardDragEnd');
+
     _autoExpandToFillGaps();
     _saveFieldConfigurations();
   }

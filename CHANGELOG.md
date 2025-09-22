@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2025-03-09
+
+### 🧹 Improved
+- **Production Logging**: Debug logging is now disabled by default for cleaner production builds
+- **Console Output**: Removed debug print statements from main application code
+- **Performance**: Reduced debug overhead in production builds
+- **Error Reporting**: Logger.error() continues to work for proper error tracking
+
+### 🔧 Changed
+- **Logger Default Behavior**: Debug mode is now disabled by default (`_debugMode = false`)
+- **Internal Implementation**: Streamlined code by removing debug-specific paths
+
+### 📋 Note for Developers
+If you need debug output during development, add this to your main():
+```dart
+Logger.setDebugMode(true);
+```
+
+All public APIs remain unchanged - this is a non-breaking improvement.
+
 ## [1.0.0] - 2025-03-09
 
 ### Added
@@ -47,10 +67,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Windows
 - Linux
 
+## [1.0.1] - 2025-03-09
+
+### 🛠️ Fixed
+- **Production Builds**: Eliminated unwanted debug output in release builds
+- **Console Cleanliness**: Clean, professional console output
+- **Performance**: Reduced overhead from debug logging in production
+
+### 🔧 Changed
+- **Logger System**: Debug mode is now disabled by default (`_debugMode = false`) for cleaner production builds
+- **Console Output**: Replaced `print()` statements with proper Logger calls
+- **Internal Implementation**: Streamlined drag and drop logic by removing debug-specific code paths
+
+### 🗑️ Removed
+- **Debug Print Statements**: Removed all `print()` statements from main application code
+- **Verbose Debug Output**: Cleaned up extensive debug logging in preview system
+- **Internal Debug Methods**: Removed debug-specific internal methods and state tracking
+
+### ✨ Added
+- **Production-Ready Logging**: Clean console output in production builds
+- **Enhanced Error Reporting**: `Logger.error()` continues to work in production for proper error tracking
+
+### 📋 Optional Configuration
+
+If you want to see debug output during development:
+
+```dart
+// Add this to your main() function
+void main() {
+  Logger.setDebugMode(true); // Enable debug logging for development
+  runApp(MyApp());
+}
+```
+
+### 🔍 Technical Details
+- **Files Modified**: 11 files with 186 insertions and 414 deletions
+- **API Compatibility**: All public widget APIs remain unchanged
+- **Logger Interface**: All Logger methods maintain the same interface
+- **Internal Cleanup**: Significant simplification of internal implementation
+
 ## [Unreleased]
 
 ### Planned
-- Replace remaining `print()` statements with Logger
 - Add more field types (date picker, dropdown, etc.)
 - Implement undo/redo functionality
 - Add keyboard shortcuts

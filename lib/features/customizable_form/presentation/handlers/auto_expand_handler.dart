@@ -34,7 +34,10 @@ class AutoExpandHandler {
       Logger.autoExpand('Checking row $row with ${fieldsInRow.length} fields');
 
       // Calculate available space in this row using utility method
-      final availableSpace = GridUtils.calculateRowAvailableSpace(row, fieldConfigs);
+      final availableSpace = GridUtils.calculateRowAvailableSpace(
+        row,
+        fieldConfigs,
+      );
 
       Logger.autoExpand('Available space: ${(availableSpace * 100).toInt()}%');
 
@@ -98,15 +101,19 @@ class AutoExpandHandler {
 
     // If only one field, expand it to fill the row
     if (fieldsInRow.length == 1) {
-      Logger.autoExpand('Single field in row, expanding ${fieldsInRow.first} to 100%');
+      Logger.autoExpand(
+        'Single field in row, expanding ${fieldsInRow.first} to 100%',
+      );
       return {fieldsInRow.first: FieldConstants.fullWidth};
     }
 
     // Check if all fields have equal or similar widths (within 5% tolerance)
-    final fieldWidths = fieldsInRow.map((id) => fieldConfigs[id]!.width).toList();
+    final fieldWidths =
+        fieldsInRow.map((id) => fieldConfigs[id]!.width).toList();
     final avgWidth = fieldWidths.reduce((a, b) => a + b) / fieldWidths.length;
     final isEqualWidths = fieldWidths.every(
-      (width) => (width - avgWidth).abs() < FieldConstants.significantGapThreshold,
+      (width) =>
+          (width - avgWidth).abs() < FieldConstants.significantGapThreshold,
     );
 
     Logger.autoExpand(
@@ -119,12 +126,19 @@ class AutoExpandHandler {
     if (isEqualWidths) {
       return _createEqualDistribution(fieldsInRow);
     } else {
-      return _createGapFillingStrategy(row, fieldsInRow, availableSpace, fieldConfigs);
+      return _createGapFillingStrategy(
+        row,
+        fieldsInRow,
+        availableSpace,
+        fieldConfigs,
+      );
     }
   }
 
   /// Create equal distribution strategy
-  static Map<String, double> _createEqualDistribution(List<String> fieldsInRow) {
+  static Map<String, double> _createEqualDistribution(
+    List<String> fieldsInRow,
+  ) {
     Logger.autoExpand('Equal widths detected - redistributing equally');
     final newWidth = FieldConstants.fullWidth / fieldsInRow.length;
     final redistributions = <String, double>{};
@@ -133,7 +147,9 @@ class AutoExpandHandler {
       redistributions[fieldId] = newWidth;
     }
 
-    Logger.autoExpand('New equal distribution: ${(newWidth * 100).toInt()}% each');
+    Logger.autoExpand(
+      'New equal distribution: ${(newWidth * 100).toInt()}% each',
+    );
     return redistributions;
   }
 
@@ -145,7 +161,7 @@ class AutoExpandHandler {
     Map<String, FieldConfig> fieldConfigs,
   ) {
     Logger.autoExpand('Unequal widths detected - using gap-filling strategy');
-    
+
     final gaps = _findGapsInRow(row, fieldsInRow, fieldConfigs);
     if (gaps.isEmpty) return null;
 
@@ -155,12 +171,43 @@ class AutoExpandHandler {
       'Largest gap: ${(largestGap.size * 100).toInt()}% at position ${largestGap.position}',
     );
 
+    // Check for different types of gaps
+    final hasLeftGap = gaps.any(
+      (gap) =>
+          gap.position < 0.05 &&
+          gap.size > FieldConstants.significantGapThreshold,
+    );
+
+    final hasMiddleGap = gaps.any(
+      (gap) =>
+          gap.position > 0.05 &&
+          gap.position < 0.95 &&
+          gap.size > FieldConstants.significantGapThreshold,
+    );
+
+    if ((hasLeftGap || hasMiddleGap) && fieldsInRow.length > 1) {
+      // When there's a gap at the beginning or middle, redistribute all fields equally
+      Logger.autoExpand(
+        hasLeftGap
+            ? 'Gap at beginning detected - redistributing all fields equally'
+            : 'Gap in middle detected - redistributing all fields equally',
+      );
+      return _createEqualDistribution(fieldsInRow);
+    }
+
     // Find the closest field to this gap
-    final closestField = _findClosestFieldToGap(largestGap, fieldsInRow, fieldConfigs);
-    
+    final closestField = _findClosestFieldToGap(
+      largestGap,
+      fieldsInRow,
+      fieldConfigs,
+    );
+
     if (closestField != null) {
       final currentWidth = fieldConfigs[closestField]!.width;
-      final newWidth = (currentWidth + availableSpace).clamp(0.0, FieldConstants.fullWidth);
+      final newWidth = (currentWidth + availableSpace).clamp(
+        0.0,
+        FieldConstants.fullWidth,
+      );
       final snappedWidth = MagneticCardSystem.getMagneticWidth(newWidth);
 
       Logger.autoExpand(
@@ -181,10 +228,15 @@ class AutoExpandHandler {
     final gaps = <({double position, double size})>[];
 
     // Get field positions and sort by x position
-    final fieldConfigsList = fieldsInRow
-        .map((id) => fieldConfigs[id]!)
-        .where((config) => MagneticCardSystem.getRowFromPosition(config.position.dy) == row)
-        .toList();
+    final fieldConfigsList =
+        fieldsInRow
+            .map((id) => fieldConfigs[id]!)
+            .where(
+              (config) =>
+                  MagneticCardSystem.getRowFromPosition(config.position.dy) ==
+                  row,
+            )
+            .toList();
 
     fieldConfigsList.sort((a, b) => a.position.dx.compareTo(b.position.dx));
 
@@ -195,7 +247,8 @@ class AutoExpandHandler {
 
     // Check gaps between fields
     for (int i = 0; i < fieldConfigsList.length - 1; i++) {
-      final currentEnd = fieldConfigsList[i].position.dx + fieldConfigsList[i].width;
+      final currentEnd =
+          fieldConfigsList[i].position.dx + fieldConfigsList[i].width;
       final nextStart = fieldConfigsList[i + 1].position.dx;
       final gapSize = nextStart - currentEnd;
 
@@ -206,7 +259,8 @@ class AutoExpandHandler {
 
     // Check gap at the end
     if (fieldConfigsList.isNotEmpty) {
-      final lastEnd = fieldConfigsList.last.position.dx + fieldConfigsList.last.width;
+      final lastEnd =
+          fieldConfigsList.last.position.dx + fieldConfigsList.last.width;
       if (lastEnd < 0.95) {
         gaps.add((position: lastEnd, size: FieldConstants.fullWidth - lastEnd));
       }
@@ -256,7 +310,8 @@ class AutoExpandHandler {
       final newWidth = entry.value;
       final currentConfig = fieldConfigs[fieldId]!;
 
-      if ((newWidth - currentConfig.width).abs() > FieldConstants.widthChangeThreshold) {
+      if ((newWidth - currentConfig.width).abs() >
+          FieldConstants.widthChangeThreshold) {
         Logger.autoExpand(
           'Updating $fieldId: ${(currentConfig.width * 100).toInt()}% → ${(newWidth * 100).toInt()}%',
         );
@@ -271,8 +326,53 @@ class AutoExpandHandler {
             expandedConfigs,
           );
         } else {
-          // Single field expansion
-          _expandSingleField(fieldId, newWidth, row, currentConfig, expandedConfigs);
+          // Single field expansion - check if we need to reposition due to gaps
+          final gaps = _findGapsInRow(row, fieldsInRow, fieldConfigs);
+          final hasLeftGap = gaps.any(
+            (gap) =>
+                gap.position < 0.05 &&
+                gap.size > FieldConstants.significantGapThreshold,
+          );
+
+          final hasMiddleGap = gaps.any(
+            (gap) =>
+                gap.position > 0.05 &&
+                gap.position < 0.95 &&
+                gap.size > FieldConstants.significantGapThreshold,
+          );
+
+          if (hasLeftGap) {
+            // Move field to start of row and expand
+            _expandFieldToFillRow(
+              fieldId,
+              newWidth,
+              row,
+              fieldConfigs,
+              expandedConfigs,
+            );
+          } else if (hasMiddleGap) {
+            // For middle gaps, this shouldn't happen as we should use redistribution
+            // But fallback to standard expansion
+            Logger.autoExpand(
+              'Middle gap detected in single field expansion - using standard expansion',
+            );
+            _expandSingleField(
+              fieldId,
+              newWidth,
+              row,
+              currentConfig,
+              expandedConfigs,
+            );
+          } else {
+            // Standard single field expansion
+            _expandSingleField(
+              fieldId,
+              newWidth,
+              row,
+              currentConfig,
+              expandedConfigs,
+            );
+          }
         }
       }
     }
@@ -288,14 +388,18 @@ class AutoExpandHandler {
   ) {
     final sortedFields = fieldsInRow.toList();
     sortedFields.sort(
-      (a, b) => fieldConfigs[a]!.position.dx.compareTo(fieldConfigs[b]!.position.dx),
+      (a, b) =>
+          fieldConfigs[a]!.position.dx.compareTo(fieldConfigs[b]!.position.dx),
     );
 
     double currentX = 0.0;
     for (final sortedFieldId in sortedFields) {
       if (expansionStrategy.containsKey(sortedFieldId)) {
         final fieldWidth = expansionStrategy[sortedFieldId]!;
-        final newPosition = Offset(currentX, row * MagneticCardSystem.cardHeight);
+        final newPosition = Offset(
+          currentX,
+          row * MagneticCardSystem.cardHeight,
+        );
 
         expandedConfigs[sortedFieldId] = fieldConfigs[sortedFieldId]!.copyWith(
           width: fieldWidth,
@@ -334,6 +438,28 @@ class AutoExpandHandler {
         newPosition = currentConfig.position;
       }
     }
+
+    expandedConfigs[fieldId] = currentConfig.copyWith(
+      width: newWidth,
+      position: newPosition,
+    );
+  }
+
+  /// Expand a field to fill row starting from left edge
+  static void _expandFieldToFillRow(
+    String fieldId,
+    double newWidth,
+    int row,
+    Map<String, FieldConfig> fieldConfigs,
+    Map<String, FieldConfig> expandedConfigs,
+  ) {
+    // Always position at start of row when filling from left
+    final newPosition = Offset(0.0, row * MagneticCardSystem.cardHeight);
+    final currentConfig = fieldConfigs[fieldId]!;
+
+    Logger.autoExpand(
+      'Moving $fieldId to start of row and expanding to ${(newWidth * 100).toInt()}%',
+    );
 
     expandedConfigs[fieldId] = currentConfig.copyWith(
       width: newWidth,

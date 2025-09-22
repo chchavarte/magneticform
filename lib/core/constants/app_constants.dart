@@ -7,9 +7,7 @@ class AppConstants {
   static const String appTitle = 'Field Collision Test';
   static const String defaultStorageKey = 'collision_test_configs';
 
-  // Debug and Development
-  static const bool debugMode = true;
-  static const bool enableLogging = true;
+
 
   // UI Configuration
   static const bool enableSystemThemeMode = true;

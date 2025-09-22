@@ -8,7 +8,8 @@
 
 A sophisticated Flutter application featuring an advanced drag-and-drop form builder with magnetic grid positioning, intelligent field placement, and smooth animations.
 
-> **🏆 Rated 9.2/10** - Production-ready form builder with advanced UX patterns
+> **🏆 Rated 9.2/10** - Production-ready form builder with advanced UX patterns  
+> **🚀 v1.0.1** - Clean production builds with professional logging
 
 ## ✨ Features
 
@@ -29,6 +30,7 @@ A sophisticated Flutter application featuring an advanced drag-and-drop form bui
 - **Real-time Visual Feedback**: See exactly where fields will be placed
 - **Responsive Design**: Adapts to different screen sizes
 - **Clean Architecture**: Feature-based organization for maintainability
+- **Production-Ready Logging**: Clean console output with professional error reporting
 
 ## 🚀 Getting Started
 
@@ -40,7 +42,7 @@ A sophisticated Flutter application featuring an advanced drag-and-drop form bui
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/flutter-magnetic-form-builder.git
+   git clone https://github.com/chchavarte/magneticform.git
    cd flutter-magnetic-form-builder
    ```
 
@@ -58,6 +60,27 @@ A sophisticated Flutter application featuring an advanced drag-and-drop form bui
 ```bash
 flutter test
 ```
+
+### 🔧 Configuration
+
+#### Debug Logging (Optional)
+By default, debug logging is disabled for clean production builds. To enable debug output during development:
+
+```dart
+import 'package:field_collision_test/core/utils/logger.dart';
+
+void main() {
+  // Enable debug logging for development
+  Logger.setDebugMode(true);
+  runApp(MyApp());
+}
+```
+
+#### Production Builds
+The app is optimized for production with:
+- ✅ No debug console output
+- ✅ Clean error reporting via `Logger.error()`
+- ✅ Optimized performance without debug overhead
 
 ## 🏛️ Architecture
 
@@ -151,11 +174,33 @@ Want to see it in action? Check out the [Demo Guide](DEMO_GUIDE.md) for a compre
 
 ### Quick Start Demo
 ```bash
-git clone https://github.com/yourusername/flutter-magnetic-form-builder.git
+git clone https://github.com/chchavarte/magneticform.git
 cd flutter-magnetic-form-builder
 flutter pub get
 flutter run
 ```
+
+## �  Migration from v1.0.0
+
+### Production-Ready Improvements
+
+Version 1.0.1 focuses on production readiness:
+
+#### Clean Console Output
+```dart
+// v1.0.0: Debug logging was enabled by default (lots of console output)
+// v1.0.1: Debug logging is disabled by default (clean production builds)
+
+// If you want debug output during development, add this to your main():
+Logger.setDebugMode(true);
+```
+
+#### Internal Code Cleanup
+- Removed debug print statements from production code
+- Streamlined internal implementation
+- Improved performance by reducing debug overhead
+
+**✅ All public APIs remain unchanged** - all widget interfaces, controllers, and data models work exactly the same.
 
 ## 📚 Documentation
 
@@ -165,6 +210,8 @@ flutter run
 - **[Contributing Guide](CONTRIBUTING.md)** - How to contribute
 - **[Demo Guide](DEMO_GUIDE.md)** - Feature showcase guide
 - **[Changelog](CHANGELOG.md)** - Version history
+- **[Migration Guide](MIGRATION_GUIDE.md)** - Upgrade instructions between versions
+- **[API Compatibility](API_COMPATIBILITY.md)** - Version compatibility matrix
 
 ## 📊 Project Stats
 

@@ -214,7 +214,7 @@ class GridUtils {
     return null; // No available position found
   }
 
-  /// Print field configurations in a consistent format (for debugging)
+  /// Print field configurations in a consistent format
   static void printFieldConfigs(
     String title,
     Map<String, FieldConfig> fieldConfigs,

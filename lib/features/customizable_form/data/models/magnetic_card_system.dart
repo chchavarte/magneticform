@@ -139,9 +139,7 @@ class MagneticCardSystem {
     final newColumnSpan = getActualColumnSpan(newWidth, newStartColumn);
     final newEndColumn = newStartColumn + newColumnSpan - 1;
 
-    print(
-      'DEBUG OVERLAP: Testing position ${newPosition.dx} -> columns $newStartColumn-$newEndColumn (span: $newColumnSpan)',
-    );
+
 
     // Check against all existing fields in the same row
     for (final entry in existingFields.entries) {
@@ -164,26 +162,18 @@ class MagneticCardSystem {
       );
       final existingEndColumn = existingStartColumn + existingColumnSpan - 1;
 
-      print(
-        'DEBUG OVERLAP: Existing field ${entry.key} at position ${config.position.dx} -> columns $existingStartColumn-$existingEndColumn',
-      );
+
 
       // Check for column overlap
       final wouldOverlapResult =
           !(newEndColumn < existingStartColumn ||
               newStartColumn > existingEndColumn);
 
-      print(
-        'DEBUG OVERLAP: Overlap check: !($newEndColumn < $existingStartColumn || $newStartColumn > $existingEndColumn) = $wouldOverlapResult',
-      );
-
       if (wouldOverlapResult) {
-        print('DEBUG OVERLAP: OVERLAP DETECTED!');
         return true; // Overlap detected
       }
     }
 
-    print('DEBUG OVERLAP: No overlap found');
     return false; // No overlap
   }
 

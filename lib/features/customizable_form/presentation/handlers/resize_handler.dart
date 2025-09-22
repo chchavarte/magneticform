@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:field_collision_test/core/constants/field_constants.dart';
-import 'package:field_collision_test/core/utils/logger.dart';
 import 'package:field_collision_test/core/utils/decoration_utils.dart';
 import '../systems/field_animations.dart';
 import '../systems/grid_utils.dart';
@@ -193,11 +192,8 @@ class FieldResizeHandler {
     required TickerProvider vsync,
     required ResizeDirection direction, // Add this parameter
   }) {
-    Logger.resize('Called for field $fieldId');
     final currentConfig = fieldConfigs[fieldId];
     if (currentConfig == null) return;
-
-    Logger.resize('Current config - width: ${currentConfig.width}, position: ${currentConfig.position}');
 
     // Check if current position would cause overlap
     final wouldOverlap = GridUtils.wouldFieldOverlap(
@@ -206,8 +202,6 @@ class FieldResizeHandler {
       fieldId,
       containerWidth,
     );
-
-    Logger.resize('Would overlap: $wouldOverlap');
 
     if (wouldOverlap) {
       // Find the last valid configuration
@@ -219,10 +213,7 @@ class FieldResizeHandler {
         direction: direction, // Pass direction
       );
 
-      Logger.resize('Valid config found: ${validConfig?.width}, ${validConfig?.position}');
-
       if (validConfig != null && validConfig != currentConfig) {
-        Logger.resize('Starting snap-back animation');
         // Animate snap-back to valid configuration
         FieldAnimations.animateFieldConfig(
           vsync: vsync,
@@ -236,7 +227,6 @@ class FieldResizeHandler {
       }
     }
 
-    Logger.resize('No snap-back needed, just saving');
     // No snap-back needed, just save
     onSave();
   }
@@ -279,13 +269,11 @@ class FieldResizeHandler {
       );
 
       if (!wouldOverlap) {
-        Logger.resize('Found valid width $testWidth at current position');
         return testConfig;
       }
     }
 
     // If no valid width found, revert to original config
-    Logger.resize('No valid width found, reverting to original config');
     final originalConfig = _originalConfigs[fieldId];
     if (originalConfig != null) {
       return originalConfig;

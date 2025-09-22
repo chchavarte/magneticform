@@ -26,13 +26,7 @@ class FieldPreviewSystem {
       currentConfigs: currentConfigs,
     );
 
-    print(
-      '🔍 DEBUG CONDITION: Row $targetRow - Total columns: 6, Occupied columns: ${rowAnalysis.occupiedColumns}, Is full: ${rowAnalysis.isRowFull}',
-    );
-
     if (rowAnalysis.isRowFull) {
-      // Row is completely full (total columns = occupied columns) → Push down
-      print('❌ DEBUG CONDITION: Row is full, using push down');
       return _calculatePushDownPreview(
         targetRow: targetRow,
         draggedFieldId: draggedFieldId,
@@ -40,8 +34,6 @@ class FieldPreviewSystem {
         containerWidth: containerWidth,
       );
     } else {
-      // Row has available space (total columns ≠ occupied columns) → Expand/Shrink
-      print('✅ DEBUG CONDITION: Row has space, trying auto-resize');
       final autoResizeResult = _calculateAutoResizePreview(
         targetRow: targetRow,
         draggedFieldId: draggedFieldId,
@@ -50,16 +42,8 @@ class FieldPreviewSystem {
       );
 
       if (autoResizeResult != null) {
-        print('✅ AUTO-RESIZE SUCCESS: Returning auto-resize result');
         return autoResizeResult;
-      } else {
-        print('❌ AUTO-RESIZE FAILED: Trying direct placement');
       }
-
-      // If auto-resize fails, try direct placement
-      print(
-        '🔄 TRYING DIRECT PLACEMENT: Field width ${(draggedField.width * 100).toInt()}%',
-      );
       final availablePosition = _findAvailablePositionInRow(
         targetRow: targetRow,
         fieldWidth: draggedField.width,
@@ -69,16 +53,9 @@ class FieldPreviewSystem {
       );
 
       if (availablePosition != null) {
-        print(
-          '✅ DIRECT PLACEMENT SUCCESS: Position found at $availablePosition',
-        );
         final previewConfigs = <String, FieldConfig>{};
         previewConfigs[draggedFieldId] = draggedField.copyWith(
           position: availablePosition,
-        );
-
-        print(
-          '⚠️  WARNING: Using original width ${(draggedField.width * 100).toInt()}% - NO RESIZE APPLIED',
         );
 
         // Other fields keep their current positions
@@ -88,10 +65,6 @@ class FieldPreviewSystem {
           }
         }
         return previewConfigs;
-      } else {
-        print(
-          '❌ DIRECT PLACEMENT FAILED: No position found for original width',
-        );
       }
 
       // Last resort: push down
@@ -104,7 +77,6 @@ class FieldPreviewSystem {
     }
   }
 
-  // Calculate preview positions using auto-resize logic
   static Map<String, FieldConfig>? _calculateAutoResizePreview({
     required int targetRow,
     required String draggedFieldId,
@@ -113,10 +85,6 @@ class FieldPreviewSystem {
   }) {
     final draggedField = currentConfigs[draggedFieldId]!;
 
-    print(
-      'DEBUG AUTO-RESIZE: Field $draggedFieldId (${draggedField.width}) targeting row $targetRow',
-    );
-
     // Calculate total available space in the row (including the dragged field's space)
     final totalAvailableSpace = _calculateTotalAvailableSpace(
       targetRow: targetRow,
@@ -124,10 +92,7 @@ class FieldPreviewSystem {
       currentConfigs: currentConfigs,
     );
 
-    print('DEBUG AUTO-RESIZE: Total available space: $totalAvailableSpace');
-
     if (totalAvailableSpace <= 0) {
-      print('DEBUG AUTO-RESIZE: No space available');
       return null;
     }
 
@@ -137,14 +102,7 @@ class FieldPreviewSystem {
       draggedField.width,
     );
 
-    print(
-      'DEBUG AUTO-RESIZE: Optimal width: $optimalWidth (current: ${draggedField.width})',
-    );
-
     if (optimalWidth != null && optimalWidth != draggedField.width) {
-      print(
-        'DEBUG AUTO-RESIZE: Auto-resize successful! ${draggedField.width} -> $optimalWidth',
-      );
 
       // Find the best position for the resized field
       final bestPosition = _findBestPositionForWidth(
@@ -155,7 +113,6 @@ class FieldPreviewSystem {
       );
 
       if (bestPosition != null) {
-        print('✅ RESIZE & POSITION SUCCESS: Creating preview configs');
         final previewConfigs = <String, FieldConfig>{};
 
         // Place resized field at the best position
@@ -165,10 +122,6 @@ class FieldPreviewSystem {
         );
         previewConfigs[draggedFieldId] = resizedField;
 
-        print(
-          '📝 RESIZED FIELD CONFIG: $draggedFieldId -> width: ${(optimalWidth * 100).toInt()}%, position: $bestPosition',
-        );
-
         // Other fields keep their current positions
         for (final entry in currentConfigs.entries) {
           if (entry.key != draggedFieldId) {
@@ -177,14 +130,9 @@ class FieldPreviewSystem {
         }
 
         return previewConfigs;
-      } else {
-        print(
-          '❌ POSITION FAILED: Could not find valid position for resized field',
-        );
       }
     }
 
-    print('DEBUG AUTO-RESIZE: Auto-resize not possible');
     return null;
   }
 
@@ -194,7 +142,6 @@ class FieldPreviewSystem {
     required String excludeFieldId,
     required Map<String, FieldConfig> currentConfigs,
   }) {
-    print('🔍 ANALYZING ROW $targetRow OCCUPANCY (excluding $excludeFieldId):');
 
     // Track which columns are occupied (6-column grid: 0-5)
     final occupiedColumns = <bool>[false, false, false, false, false, false];
@@ -215,10 +162,6 @@ class FieldPreviewSystem {
         ); // Use dummy width for column calculation
         final columnSpan = MagneticCardSystem.getColumnsFromWidth(config.width);
 
-        print(
-          '  Field ${entry.key}: Columns $startColumn-${startColumn + columnSpan - 1} (width: ${(config.width * 100).toInt()}%)',
-        );
-
         // Mark columns as occupied
         for (int i = startColumn; i < startColumn + columnSpan && i < 6; i++) {
           occupiedColumns[i] = true;
@@ -229,11 +172,6 @@ class FieldPreviewSystem {
     // Count occupied columns
     final totalOccupied = occupiedColumns.where((occupied) => occupied).length;
     final isRowFull = totalOccupied == 6; // All 6 columns are occupied
-
-    print(
-      '  Column occupancy: [${occupiedColumns.map((o) => o ? 'X' : '_').join(', ')}]',
-    );
-    print('  Total occupied: $totalOccupied/6, Is full: $isRowFull');
 
     return (occupiedColumns: totalOccupied, isRowFull: isRowFull);
   }
@@ -351,23 +289,13 @@ class FieldPreviewSystem {
 
   // Find the best width to fill available space
   static double? _findBestFitWidth(double availableSpace, double currentWidth) {
-    print(
-      'DEBUG BEST FIT: Available space: $availableSpace, current width: $currentWidth',
-    );
-    print('DEBUG BEST FIT: Card widths: ${MagneticCardSystem.cardWidths}');
-
     // Try to find the largest width that fits and is different from current
     for (final width in MagneticCardSystem.cardWidths.reversed) {
-      print(
-        'DEBUG BEST FIT: Testing width $width - fits: ${width <= availableSpace}, different: ${width != currentWidth}',
-      );
       if (width <= availableSpace && width != currentWidth) {
-        print('DEBUG BEST FIT: Found best width: $width');
         return width;
       }
     }
 
-    print('DEBUG BEST FIT: No suitable width found');
     return null;
   }
 
@@ -381,19 +309,11 @@ class FieldPreviewSystem {
     final containerWidth = 400.0; // Use dummy width for column calculations
     final columnSpan = MagneticCardSystem.getColumnsFromWidth(fieldWidth);
 
-    print(
-      'DEBUG POSITION: Finding position for width $fieldWidth ($columnSpan columns)',
-    );
-
     // Try each possible starting column
     for (int startCol = 0; startCol <= 6 - columnSpan; startCol++) {
       final testPosition = Offset(
         MagneticCardSystem.getColumnPositionNormalized(startCol),
         targetRow * MagneticCardSystem.cardHeight,
-      );
-
-      print(
-        'DEBUG POSITION: Testing column $startCol, position: ${testPosition.dx}',
       );
 
       // Check if this position would overlap with existing fields
@@ -419,30 +339,20 @@ class FieldPreviewSystem {
 
         final testEnd = startCol + columnSpan - 1;
 
-        print(
-          '🔍 OVERLAP CHECK: Testing cols $startCol-$testEnd vs existing ${entry.key} cols $existingStart-$existingEnd',
-        );
-
         if (!(testEnd < existingStart || startCol > existingEnd)) {
           hasOverlap = true;
-          print('❌ OVERLAP DETECTED: Field ${entry.key} blocks position');
           break;
-        } else {
-          print('✅ NO OVERLAP: Position is clear');
         }
       }
 
       if (!hasOverlap) {
-        print('DEBUG POSITION: Found valid position at column $startCol');
         return testPosition;
       }
     }
 
-    print('DEBUG POSITION: No valid position found');
     return null;
   }
 
-  // Calculate preview positions using push down logic
   static Map<String, FieldConfig> _calculatePushDownPreview({
     required int targetRow,
     required String draggedFieldId,

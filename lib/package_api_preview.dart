@@ -588,7 +588,7 @@ class ExampleUsage extends StatelessWidget {
     return MagneticFormBuilder(
       availableFields: FieldRegistry.registeredFields,
       onFieldsChanged: (configs) {
-        print('Form updated: ${configs.length} fields');
+        // Form updated callback
       },
     );
   }
@@ -636,10 +636,10 @@ class AdvancedExampleUsage extends StatelessWidget {
         ],
       },
       onFieldsChanged: (configs) {
-        print('Form configuration changed');
+        // Form configuration changed callback
       },
       onFieldConfigured: (fieldId, data) {
-        print('Field $fieldId configured with: $data');
+        // Field configured callback
       },
     );
   }

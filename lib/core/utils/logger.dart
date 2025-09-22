@@ -1,18 +1,18 @@
 import 'dart:developer' as developer;
 
-/// Improved logging utility using Flutter's developer package
+/// Logging utility using Flutter's developer package
 class Logger {
   // Private constructor to prevent instantiation
   Logger._();
 
-  static bool _debugMode = true;
+  static bool _debugMode = false;
 
-  /// Enable or disable debug logging
+  /// Enable or disable logging
   static void setDebugMode(bool enabled) {
     _debugMode = enabled;
   }
 
-  /// Debug level logging (most verbose)
+  /// Debug level logging
   static void debug(String message) {
     if (_debugMode) {
       developer.log('🐛 $message', name: 'DEBUG');
@@ -33,7 +33,7 @@ class Logger {
     }
   }
 
-  /// Error level logging (always shown)
+  /// Error level logging
   static void error(String message) {
     developer.log('❌ $message', name: 'ERROR');
   }

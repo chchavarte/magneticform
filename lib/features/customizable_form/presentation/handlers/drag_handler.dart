@@ -65,11 +65,6 @@ class DragHandler {
     );
 
     final newPosition = Offset(newX, newY);
-    
-    // Debug field2 drag calculation
-    if (fieldId == 'field2') {
-      print('FIELD2 DRAG DEBUG: dragStartFieldPosition=${dragState.dragStartFieldPosition.dx}, deltaX=$deltaX, newX=$newX');
-    }
 
     // Get hovered grid position
     final gridPosition = MagneticCardSystem.getGridPosition(newPosition, containerWidth);
@@ -131,7 +126,6 @@ class DragHandler {
         finalConfigs: previewState.previewConfigs,
       );
     } else {
-      // Standard snap logic
       final config = fieldConfigs[fieldId]!;
       final snappedPosition = MagneticCardSystem.getMagneticSnapPosition(
         config.position,
