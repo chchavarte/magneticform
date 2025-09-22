@@ -210,8 +210,7 @@ Logger.setDebugMode(true);
 - **[Contributing Guide](CONTRIBUTING.md)** - How to contribute
 - **[Demo Guide](DEMO_GUIDE.md)** - Feature showcase guide
 - **[Changelog](CHANGELOG.md)** - Version history
-- **[Migration Guide](MIGRATION_GUIDE.md)** - Upgrade instructions between versions
-- **[API Compatibility](API_COMPATIBILITY.md)** - Version compatibility matrix
+
 
 ## 📊 Project Stats
 
