@@ -569,8 +569,8 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
       _lastHoveredRow = hoveredRow;
       _lastHoveredZone = zoneResult.zone;
       
-      // Start new timer for 0.3s delay
-      _hoverTimer = Timer(const Duration(milliseconds: 300), () {
+      // Start new timer for reduced delay (200ms for better responsiveness)
+      _hoverTimer = Timer(const Duration(milliseconds: 200), () {
         _handleZoneDrop(fieldId, hoveredRow, zoneResult.zone);
       });
     }
@@ -640,13 +640,8 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
       }
     }
 
-    setState(() {
-      _zonePreviewConfigs = previewConfigs;
-      _isShowingZonePreview = true;
-    });
-
     final widthPercent = (fieldWidth * 100).toInt();
-    _showAutoResizeMessage('Right drop: $fieldId moves right, others shift left ($totalFields fields at $widthPercent% each)');
+    _applyZonePreviewSmooth(previewConfigs, 'Right drop: $fieldId moves right, others shift left ($totalFields fields at $widthPercent% each)');
   }
 
   // Handle left-side drop (move dragged field to leftmost, shift others right) 
@@ -693,13 +688,8 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
       }
     }
 
-    setState(() {
-      _zonePreviewConfigs = previewConfigs;
-      _isShowingZonePreview = true;
-    });
-
     final widthPercent = (fieldWidth * 100).toInt();
-    _showAutoResizeMessage('Left drop: $fieldId moves left, others shift right ($totalFields fields at $widthPercent% each)');
+    _applyZonePreviewSmooth(previewConfigs, 'Left drop: $fieldId moves left, others shift right ($totalFields fields at $widthPercent% each)');
   }
 
   // Handle center drop (split fields)
@@ -763,13 +753,8 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
       }
     }
 
-    setState(() {
-      _zonePreviewConfigs = previewConfigs;
-      _isShowingZonePreview = true;
-    });
-
     final widthPercent = (fieldWidth * 100).toInt();
-    _showAutoResizeMessage('Center drop: $totalFields fields at $widthPercent% width each');
+    _applyZonePreviewSmooth(previewConfigs, 'Center drop: $totalFields fields at $widthPercent% width each');
   }
 
   // Handle push down (use existing logic)
@@ -778,14 +763,75 @@ class CustomizableFormScreenState extends State<CustomizableFormScreen>
     _showPreview(fieldId, targetRow);
   }
 
-  // Clear zone preview
+  // Clear zone preview with smooth transition
   void _clearZonePreview() {
-    if (_isShowingZonePreview) {
+    if (_isShowingZonePreview && _zonePreviewConfigs.isNotEmpty) {
+      // Animate back to original positions smoothly
+      FieldPreviewSystem.animateHoverExit(
+        vsync: this,
+        fromConfigs: _zonePreviewConfigs,
+        toConfigs: _fieldConfigs,
+        onUpdate: (configs) {
+          setState(() {
+            _zonePreviewConfigs = configs;
+          });
+        },
+        onComplete: () {
+          setState(() {
+            _zonePreviewConfigs.clear();
+            _isShowingZonePreview = false;
+          });
+        },
+      );
+    } else if (_isShowingZonePreview) {
+      // Immediate clear if no preview configs
       setState(() {
         _zonePreviewConfigs.clear();
         _isShowingZonePreview = false;
       });
     }
+  }
+
+  // Apply zone preview with smooth transition
+  void _applyZonePreviewSmooth(Map<String, FieldConfig> previewConfigs, String message) {
+    if (_isShowingZonePreview) {
+      // Animate from current preview to new preview
+      FieldPreviewSystem.animateHoverEnter(
+        vsync: this,
+        fromConfigs: _zonePreviewConfigs,
+        toConfigs: previewConfigs,
+        onUpdate: (configs) {
+          setState(() {
+            _zonePreviewConfigs = configs;
+          });
+        },
+        onComplete: () {
+          setState(() {
+            _zonePreviewConfigs = previewConfigs;
+          });
+        },
+      );
+    } else {
+      // Animate from current field positions to preview
+      FieldPreviewSystem.animateHoverEnter(
+        vsync: this,
+        fromConfigs: _fieldConfigs,
+        toConfigs: previewConfigs,
+        onUpdate: (configs) {
+          setState(() {
+            _zonePreviewConfigs = configs;
+            _isShowingZonePreview = true;
+          });
+        },
+        onComplete: () {
+          setState(() {
+            _zonePreviewConfigs = previewConfigs;
+          });
+        },
+      );
+    }
+    
+    _showAutoResizeMessage(message);
   }
 
   // Show preview positions (existing push-down logic)

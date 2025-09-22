@@ -605,6 +605,44 @@ class FieldPreviewSystem {
     );
   }
 
+  // Animate smooth hover enter (when dropzone is detected)
+  static void animateHoverEnter({
+    required TickerProvider vsync,
+    required Map<String, FieldConfig> fromConfigs,
+    required Map<String, FieldConfig> toConfigs,
+    required Function(Map<String, FieldConfig>) onUpdate,
+    VoidCallback? onComplete,
+  }) {
+    FieldAnimations.animateMultipleFields(
+      vsync: vsync,
+      fromConfigs: fromConfigs,
+      toConfigs: toConfigs,
+      onUpdate: onUpdate,
+      onComplete: onComplete,
+      duration: AnimationConstants.hoverEnterDuration,
+      curve: AnimationConstants.hoverEnterCurve,
+    );
+  }
+
+  // Animate smooth hover exit (when leaving dropzone)
+  static void animateHoverExit({
+    required TickerProvider vsync,
+    required Map<String, FieldConfig> fromConfigs,
+    required Map<String, FieldConfig> toConfigs,
+    required Function(Map<String, FieldConfig>) onUpdate,
+    VoidCallback? onComplete,
+  }) {
+    FieldAnimations.animateMultipleFields(
+      vsync: vsync,
+      fromConfigs: fromConfigs,
+      toConfigs: toConfigs,
+      onUpdate: onUpdate,
+      onComplete: onComplete,
+      duration: AnimationConstants.hoverExitDuration,
+      curve: AnimationConstants.hoverExitCurve,
+    );
+  }
+
   // Get visual feedback information for preview state
   static PreviewInfo getPreviewInfo({
     required int targetRow,
